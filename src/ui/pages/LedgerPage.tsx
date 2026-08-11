@@ -6,6 +6,7 @@ import type { JournalEntry } from '../../domain/journal'
 import { accountLedgerWindow, trialBalance } from '../../domain/ledger'
 import { buildPartyAging, partyBalances, partySubledger } from '../../domain/subledger'
 import { Money } from '../../lib/money'
+import { ExportButtons } from '../components/ExportButtons'
 import { useCompanyData, useSelectedCompanyId } from '../state/company'
 
 /**
@@ -320,6 +321,21 @@ function AgingView({
     <>
       {sections.map(({ role, aging }) => (
         <Card key={role} title={`${role === 'accounts_receivable' ? 'Receivables' : 'Payables'} aging as of ${asOf}`}>
+          <div className="mb-2 flex justify-end">
+            <ExportButtons
+              filename={`${role === 'accounts_receivable' ? 'ar' : 'ap'}-aging-${asOf}`}
+              sheetName="Aging"
+              headers={['Party', 'Current', '31-60', '61-90', 'Over 90', 'Total']}
+              rows={[...aging.entries()].map(([partyId, b]) => [
+                nameOf(partyId),
+                b.current.format(),
+                b.d31_60.format(),
+                b.d61_90.format(),
+                b.over90.format(),
+                b.total.format(),
+              ])}
+            />
+          </div>
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase text-slate-500">
               <tr>
@@ -368,6 +384,17 @@ function TrialBalanceView({
   const tb = useMemo(() => trialBalance(entries, accounts as never, asOf), [entries, accounts, asOf])
   return (
     <Card title={`Trial balance as of ${asOf}`}>
+      <div className="mb-2 flex justify-end">
+        <ExportButtons
+          filename={`trial-balance-${asOf}`}
+          sheetName="Trial balance"
+          headers={['Account', 'Debit', 'Credit']}
+          rows={[
+            ...tb.rows.map((r) => [`${r.accountCode} — ${r.accountName}`, r.debit.format(), r.credit.format()]),
+            ['TOTALS', tb.totalDebit.format(), tb.totalCredit.format()],
+          ]}
+        />
+      </div>
       <table className="w-full text-left text-sm">
         <thead className="text-xs uppercase text-slate-500">
           <tr>

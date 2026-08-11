@@ -10,6 +10,7 @@ import {
   buildPurchaseJournal,
   buildSalesJournal,
 } from '../../reports/books'
+import { ExportButtons } from '../components/ExportButtons'
 import { PrintDoc, type PrintColumn, type PrintRow } from '../print/PrintDoc'
 import { useCompanyData, useSelectedCompanyId } from '../state/company'
 
@@ -202,9 +203,17 @@ export function BooksPage() {
             BIR columnar layouts for loose-leaf / CAS — print via the browser, no PDF library.
           </p>
         </div>
-        <div className="flex gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5" />
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1.5" />
+          <ExportButtons
+            filename={`${book}-${from}-${to}`}
+            sheetName={BOOKS.find((b) => b.key === book)!.label}
+            headers={doc.columns.map((c) => c.header)}
+            rows={doc.rows.map((r) =>
+              r.kind === 'section' ? [r.cells[0] ?? ''] : r.cells.map((c) => c),
+            )}
+          />
           <button
             onClick={() => setPrinting(true)}
             disabled={!companyQ.data}

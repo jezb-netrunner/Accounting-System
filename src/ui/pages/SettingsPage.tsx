@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { dataPort } from '../../data'
+import { exportCompany, importCompany, parseCompanyBundle } from '../../data/portability'
 import { instantiateTemplate } from '../../domain/coa'
 import { formatTIN } from '../../domain/core'
 import {
@@ -12,7 +13,12 @@ import {
 import type { TaxProfile } from '../../domain/taxProfile'
 import { coaTemplateForProfile } from '../../seed/coaTemplates'
 import { defaultAnswers, ProfileQuestionnaire } from '../onboarding/ProfileQuestionnaire'
-import { useCompanyData, useInvalidateCompany, useSelectedCompanyId } from '../state/company'
+import {
+  setSelectedCompany,
+  useCompanyData,
+  useInvalidateCompany,
+  useSelectedCompanyId,
+} from '../state/company'
 
 /**
  * Registration settings: shows the profile versions timeline and lets the
@@ -165,8 +171,10 @@ export function SettingsPage() {
         </ul>
       </section>
 
+      <PortabilitySection companyId={companyId} companyName={company?.registeredName ?? ''} />
+
       {editing && (
-        <section className="space-y-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+        <section className="space-y-4 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100" data-editing>
           <h2 className="font-semibold">Update registration</h2>
           <ProfileQuestionnaire value={editing} onChange={setEditing} showEffectiveFrom />
           {preview && (
@@ -198,5 +206,71 @@ export function SettingsPage() {
         </section>
       )}
     </div>
+  )
+}
+
+function PortabilitySection({ companyId, companyName }: { companyId: string; companyName: string }) {
+  const invalidate = useInvalidateCompany()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [note, setNote] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+
+  const doExport = async () => {
+    try {
+      const bundle = await exportCompany(dataPort(), companyId)
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `${companyName.replace(/[^\w-]+/g, '-') || 'company'}-${new Date().toISOString().slice(0, 10)}.phbooks.json`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      setNote({ kind: 'ok', text: 'Exported the full company as JSON.' })
+    } catch (err) {
+      setNote({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  const doImport = async (file: File) => {
+    try {
+      const bundle = parseCompanyBundle(await file.text())
+      const company = await importCompany(dataPort(), bundle)
+      invalidate(company.id)
+      setSelectedCompany(company.id)
+      setNote({ kind: 'ok', text: `Imported ${company.registeredName} — switched to it.` })
+    } catch (err) {
+      setNote({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  return (
+    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+      <h2 className="mb-1 font-semibold">Portability</h2>
+      <p className="mb-3 text-sm text-slate-500">
+        Move a whole company between browsers before any backend exists: the export carries the
+        profile history, chart, master data, sheets, the append-only ledger, locks, generated
+        returns, and the audit trail.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => void doExport()} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+          Export this company (JSON)
+        </button>
+        <button onClick={() => fileRef.current?.click()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50">
+          Import a company…
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) void doImport(f)
+            e.target.value = ''
+          }}
+        />
+      </div>
+      {note && (
+        <p className={`mt-2 text-sm ${note.kind === 'ok' ? 'text-brand-700' : 'text-red-600'}`}>{note.text}</p>
+      )}
+    </section>
   )
 }
