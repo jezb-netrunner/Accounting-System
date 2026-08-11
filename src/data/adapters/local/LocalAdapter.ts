@@ -70,6 +70,25 @@ export function createLocalAdapter(dbName?: string): DataPort {
   const db = new PhBooksDB(dbName)
 
   return {
+    postDocument: async ({ sheet, entry }) => {
+      if (sheet.status !== 'posted' || sheet.postedEntryId !== entry.id) {
+        throw new AppendOnlyViolationError('postDocument expects a posted sheet bound to its entry')
+      }
+      await db.transaction('rw', db.sheets, db.journal, async () => {
+        const existingSheet = await db.sheets.get(sheet.id)
+        if (existingSheet && existingSheet.status !== 'draft') {
+          throw new AppendOnlyViolationError(
+            `Sheet ${sheet.documentNo} is already ${existingSheet.status}`,
+          )
+        }
+        const existingEntry = await db.journal.get(entry.id)
+        if (existingEntry) {
+          throw new AppendOnlyViolationError(`Journal entry ${entry.id} already exists`)
+        }
+        await db.sheets.put(sheet)
+        await db.journal.add(entry)
+      })
+    },
     companies: {
       list: () => db.companies.toArray(),
       get: async (id) => (await db.companies.get(id)) ?? null,
@@ -194,6 +213,18 @@ export function createLocalAdapter(dbName?: string): DataPort {
             )
           }
           await db.sheets.put(sheet)
+        })
+      },
+      deleteDraft: async (sheetId) => {
+        await db.transaction('rw', db.sheets, async () => {
+          const existing = await db.sheets.get(sheetId)
+          if (!existing) return
+          if (existing.status !== 'draft') {
+            throw new AppendOnlyViolationError(
+              `Sheet ${existing.documentNo} is ${existing.status} and cannot be deleted`,
+            )
+          }
+          await db.sheets.delete(sheetId)
         })
       },
       markPosted: async (sheetId, entryId) => {

@@ -1,6 +1,6 @@
 import { Money, sum } from '../lib/money'
 import { deriveDocumentTotals, type DocumentTaxContext } from '../tax/engine/lineTax'
-import { computeCompensationWithholding } from '../tax/engine/withholding'
+import { computePayrollWithholding } from '../tax/engine/withholdingPeriod'
 import type { Account, SystemRole, TaxTag } from './coa'
 import type { JournalEntryId } from './core'
 import { createJournalEntry, type JournalEntry, type JournalLineInput } from './journal'
@@ -59,6 +59,8 @@ export interface PostingContext {
   readonly postedAt: string
   /** Item id → income/expense account code, for lines priced off items. */
   readonly itemAccountCodes?: ReadonlyMap<string, { income: string; expense: string | null }>
+  /** Company ATC master data rows beyond the built-in matrix. */
+  readonly customAtcRates?: readonly import('../tax/rules/withholding').AtcRateRule[]
 }
 
 const salesTagFor = (vatClass: 'vatable' | 'exempt' | 'zero_rated' | null): TaxTag =>
@@ -71,6 +73,7 @@ const taxContextFor = (sheet: Sheet, ctx: PostingContext): DocumentTaxContext =>
   date: sheet.date,
   counterpartyClass: ctx.party?.payeeClass ?? 'corporation',
   counterpartyIsGovernment: ctx.party?.isGovernment ?? false,
+  customAtcRates: ctx.customAtcRates,
 })
 
 export function postSheet(sheet: Sheet, ctx: PostingContext): JournalEntry {
@@ -260,20 +263,43 @@ function generalJournalLines(sheet: Sheet, ctx: PostingContext): JournalLineInpu
 }
 
 /**
- * Payroll register: one line per employee, amount = monthly taxable gross.
- * Posts gross to salaries expense, withholding tax to its payable, net to
- * salaries payable. Statutory contributions (SSS/PhilHealth/Pag-IBIG) enter
- * as explicit general-journal or disbursement lines for now — their
- * contribution tables are a planned rules table, not engine logic.
+ * Payroll register: one line per employee. amountCentavos is basic pay;
+ * the optional payroll block carries other taxable pay, the 13th-month/
+ * other-benefits bucket, de minimis, and employee-share statutory
+ * contributions. Posts gross to salaries expense, withheld tax and the
+ * employee-share contributions to their payables, net to salaries payable.
+ * (Employer-share contributions post separately — their tables are a
+ * planned rules table, not engine logic.)
  */
 function payrollLines(sheet: Sheet, ctx: PostingContext): JournalLineInput[] {
   const { accounts } = ctx
-  const gross = sum(sheet.lines.map((l) => Money.fromCentavos(l.amountCentavos)))
-  const wtax = sum(
-    sheet.lines.map((l) =>
-      computeCompensationWithholding(Money.fromCentavos(l.amountCentavos), sheet.date),
-    ),
-  )
+  let gross = Money.ZERO
+  let wtax = Money.ZERO
+  let contributions = Money.ZERO
+  for (const l of sheet.lines) {
+    const p = l.payroll
+    const r = computePayrollWithholding(
+      {
+        frequency: sheet.payrollFrequency ?? 'monthly',
+        basicPay: Money.fromCentavos(l.amountCentavos),
+        otherTaxable: Money.fromCentavos(p?.otherTaxableCentavos ?? 0),
+        thirteenthMonthAndOtherBenefits: Money.fromCentavos(p?.thirteenthMonthCentavos ?? 0),
+        thirteenthMonthYtdBefore: Money.ZERO,
+        // The register's de-minimis column is a within-caps lump (no per-kind
+        // breakdown at sheet level), so it stays out of the taxable base.
+        deMinimis: [],
+        mandatoryContributions: Money.fromCentavos(p?.mandatoryContributionsCentavos ?? 0),
+      },
+      sheet.date,
+    )
+    gross = gross
+      .add(Money.fromCentavos(l.amountCentavos))
+      .add(Money.fromCentavos(p?.otherTaxableCentavos ?? 0))
+      .add(Money.fromCentavos(p?.thirteenthMonthCentavos ?? 0))
+      .add(Money.fromCentavos(p?.deMinimisCentavos ?? 0))
+    wtax = wtax.add(r.withholding)
+    contributions = contributions.add(Money.fromCentavos(p?.mandatoryContributionsCentavos ?? 0))
+  }
   if (!ctx.profile.withholdingAgent.compensation && !wtax.isZero()) {
     throw new PostingError(
       'This company is not registered as a compensation withholding agent but payroll requires withholding',
@@ -287,7 +313,14 @@ function payrollLines(sheet: Sheet, ctx: PostingContext): JournalLineInput[] {
     const acct = accounts.byTag('compensation_wtax_payable')
     out.push({ accountCode: acct.code, credit: wtax, taxTag: acct.taxTag })
   }
-  out.push({ accountCode: accounts.byRole('salaries_payable').code, credit: gross.subtract(wtax) })
+  if (!contributions.isZero()) {
+    const acct = accounts.byTag('sss_philhealth_pagibig_payable')
+    out.push({ accountCode: acct.code, credit: contributions, taxTag: acct.taxTag })
+  }
+  out.push({
+    accountCode: accounts.byRole('salaries_payable').code,
+    credit: gross.subtract(wtax).subtract(contributions),
+  })
   return out
 }
 

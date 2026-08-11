@@ -27,6 +27,9 @@ const stub = <T extends object>(name: string): T =>
 
 export function createSupabaseAdapter(): DataPort {
   return {
+    postDocument: () => {
+      throw new NotImplementedError('postDocument')
+    },
     companies: stub('companies'),
     taxProfiles: stub('taxProfiles'),
     accounts: stub('accounts'),

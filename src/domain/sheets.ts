@@ -45,6 +45,13 @@ export interface SheetLine {
   readonly atc: string | null
   /** General journal only: which side this line hits. */
   readonly side: 'debit' | 'credit' | null
+  /** Payroll register only: components beyond basic pay (amountCentavos). */
+  readonly payroll?: {
+    readonly otherTaxableCentavos: number
+    readonly thirteenthMonthCentavos: number
+    readonly deMinimisCentavos: number
+    readonly mandatoryContributionsCentavos: number
+  }
 }
 
 export interface Sheet {
@@ -63,6 +70,8 @@ export interface Sheet {
   readonly bankAccountCode: string | null
   /** Payroll register: period covered. */
   readonly payrollPeriod: { from: ISODate; to: ISODate } | null
+  /** Payroll register: which withholding-table column applies (default monthly). */
+  readonly payrollFrequency?: 'daily' | 'weekly' | 'semi_monthly' | 'monthly'
 }
 
 export const isSaleSheet = (t: SheetType): boolean =>

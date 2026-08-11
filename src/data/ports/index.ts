@@ -87,6 +87,8 @@ export interface SheetRepository {
   get(id: string): Promise<Sheet | null>
   /** Drafts are mutable; posted/void sheets are not (adapter must reject). */
   saveDraft(sheet: Sheet): Promise<void>
+  /** Drafts are deletable; posted/void sheets are not (adapter must reject). */
+  deleteDraft(sheetId: string): Promise<void>
   /** Transition draft → posted, recording the entry id. Fails if not draft. */
   markPosted(sheetId: string, entryId: string): Promise<void>
   markVoid(sheetId: string): Promise<void>
@@ -108,8 +110,19 @@ export interface PeriodLockRepository {
   append(lock: PeriodLock): Promise<void>
 }
 
+/**
+ * One atomic post: the sheet flips to posted (with its final document
+ * number) and the journal entry appends in a single storage transaction —
+ * either both land or neither does.
+ */
+export interface PostDocumentInput {
+  readonly sheet: Sheet // status 'posted', postedEntryId set, final documentNo
+  readonly entry: JournalEntry
+}
+
 /** The full data port the app is wired against. */
 export interface DataPort {
+  postDocument(input: PostDocumentInput): Promise<void>
   readonly companies: CompanyRepository
   readonly taxProfiles: TaxProfileRepository
   readonly accounts: AccountRepository
