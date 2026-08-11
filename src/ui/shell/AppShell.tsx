@@ -116,6 +116,14 @@ export function AppShell() {
           <p className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Setup
           </p>
+          <Link
+            to="/app/master/$section"
+            params={{ section: 'parties' }}
+            className="block rounded-md px-2 py-1.5 text-slate-600 hover:bg-slate-100"
+            activeProps={{ className: 'block rounded-md px-2 py-1.5 bg-brand-50 text-brand-700 font-medium' }}
+          >
+            Master data
+          </Link>
           <NavLink to="/app/settings" label="Registration & settings" />
         </nav>
         <div className="border-t border-slate-100 p-3">

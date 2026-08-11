@@ -36,6 +36,8 @@ export interface SheetLine {
   /** Direct account reference (general journal, disbursement distribution). */
   readonly accountCode: string | null
   readonly itemId: string | null
+  /** Payroll register lines reference the employee. */
+  readonly employeeId?: string | null
   readonly quantity: number | null
   readonly amountCentavos: number
   readonly amountIsVatInclusive: boolean

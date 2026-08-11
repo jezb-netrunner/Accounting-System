@@ -34,6 +34,7 @@ export function createSupabaseAdapter(): DataPort {
     employees: stub('employees'),
     bankAccounts: stub('bankAccounts'),
     items: stub('items'),
+    atcCodes: stub('atcCodes'),
     numbering: stub('numbering'),
     sheets: stub('sheets'),
     journal: stub('journal'),

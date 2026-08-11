@@ -12,6 +12,7 @@ import { SheetsPage } from './pages/SheetsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { ClosePage } from './pages/ClosePage'
 import { SettingsPage } from './pages/SettingsPage'
+import { MasterDataPage } from './pages/MasterDataPage'
 
 const rootRoute = createRootRoute({ component: Outlet })
 
@@ -63,10 +64,23 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 })
 
+const masterRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'master/$section',
+  component: MasterDataPage,
+})
+
 const routeTree = rootRoute.addChildren([
   landingRoute,
   onboardingRoute,
-  appRoute.addChildren([dashboardRoute, sheetsRoute, reportsRoute, closeRoute, settingsRoute]),
+  appRoute.addChildren([
+    dashboardRoute,
+    sheetsRoute,
+    reportsRoute,
+    closeRoute,
+    settingsRoute,
+    masterRoute,
+  ]),
 ])
 
 /**

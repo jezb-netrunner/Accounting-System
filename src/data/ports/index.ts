@@ -2,6 +2,7 @@ import type { Account } from '../../domain/coa'
 import type { CompanyId, Period, RegisteredParty } from '../../domain/core'
 import type { JournalEntry } from '../../domain/journal'
 import type {
+  AtcCode,
   BankAccount,
   Employee,
   Item,
@@ -46,21 +47,32 @@ export interface PartyRepository {
   list(companyId: CompanyId): Promise<Party[]>
   get(id: string): Promise<Party | null>
   save(party: Party): Promise<void>
+  /** Hard delete — callers must verify the record is unreferenced first. */
+  delete(id: string): Promise<void>
 }
 
 export interface EmployeeRepository {
   list(companyId: CompanyId): Promise<Employee[]>
   save(employee: Employee): Promise<void>
+  delete(id: string): Promise<void>
 }
 
 export interface BankAccountRepository {
   list(companyId: CompanyId): Promise<BankAccount[]>
   save(account: BankAccount): Promise<void>
+  delete(id: string): Promise<void>
 }
 
 export interface ItemRepository {
   list(companyId: CompanyId): Promise<Item[]>
   save(item: Item): Promise<void>
+  delete(id: string): Promise<void>
+}
+
+export interface AtcCodeRepository {
+  list(companyId: CompanyId): Promise<AtcCode[]>
+  save(code: AtcCode): Promise<void>
+  delete(id: string): Promise<void>
 }
 
 export interface NumberingRepository {
@@ -105,6 +117,7 @@ export interface DataPort {
   readonly employees: EmployeeRepository
   readonly bankAccounts: BankAccountRepository
   readonly items: ItemRepository
+  readonly atcCodes: AtcCodeRepository
   readonly numbering: NumberingRepository
   readonly sheets: SheetRepository
   readonly journal: JournalRepository

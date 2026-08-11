@@ -3,6 +3,7 @@ import type { Account } from '../../../domain/coa'
 import type { CompanyId } from '../../../domain/core'
 import type { JournalEntry } from '../../../domain/journal'
 import type {
+  AtcCode,
   BankAccount,
   Employee,
   Item,
@@ -36,6 +37,7 @@ class PhBooksDB extends Dexie {
   employees!: Table<Employee, string>
   bankAccounts!: Table<BankAccount, string>
   items!: Table<Item, string>
+  atcCodes!: Table<AtcCode, string>
   numbering!: Table<NumberingSeries, string>
   sheets!: Table<Sheet, string>
   journal!: Table<JournalEntry, string>
@@ -55,6 +57,9 @@ class PhBooksDB extends Dexie {
       sheets: 'id, companyId, [companyId+type], [companyId+status]',
       journal: 'id, companyId, [companyId+entryNo], [companyId+date]',
       periodLocks: '[companyId+periodKey], companyId',
+    })
+    this.version(2).stores({
+      atcCodes: 'id, companyId',
     })
   }
 }
@@ -109,12 +114,18 @@ export function createLocalAdapter(dbName?: string): DataPort {
       save: async (party) => {
         await db.parties.put(party)
       },
+      delete: async (id) => {
+        await db.parties.delete(id)
+      },
     },
 
     employees: {
       list: (companyId) => db.employees.where('companyId').equals(companyId).toArray(),
       save: async (employee) => {
         await db.employees.put(employee)
+      },
+      delete: async (id) => {
+        await db.employees.delete(id)
       },
     },
 
@@ -123,12 +134,28 @@ export function createLocalAdapter(dbName?: string): DataPort {
       save: async (account) => {
         await db.bankAccounts.put(account)
       },
+      delete: async (id) => {
+        await db.bankAccounts.delete(id)
+      },
     },
 
     items: {
       list: (companyId) => db.items.where('companyId').equals(companyId).toArray(),
       save: async (item) => {
         await db.items.put(item)
+      },
+      delete: async (id) => {
+        await db.items.delete(id)
+      },
+    },
+
+    atcCodes: {
+      list: (companyId) => db.atcCodes.where('companyId').equals(companyId).toArray(),
+      save: async (code) => {
+        await db.atcCodes.put(code)
+      },
+      delete: async (id) => {
+        await db.atcCodes.delete(id)
       },
     },
 

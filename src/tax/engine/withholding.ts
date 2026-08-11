@@ -18,15 +18,21 @@ export interface WithholdingResult {
  * VAT. Two-tier ATCs (professional fees 5%/10%, corporate professional
  * services 10%/15%) step up when the payee's cumulative gross for the year
  * crosses the threshold — pass `cumulativeAnnualGross` (before this payment)
- * to get the stepping; omit it to stay on the declared tier.
+ * to get the stepping; omit it to stay on the declared tier. Company-defined
+ * ATC master data rows arrive via `extraRates` (the built-in table wins on
+ * conflicts).
  */
 export function computeWithholding(
   atc: string,
   base: Money,
   date: ISODate,
-  options: { cumulativeAnnualGross?: Money; payeeDeclaredHigherTier?: boolean } = {},
+  options: {
+    cumulativeAnnualGross?: Money
+    payeeDeclaredHigherTier?: boolean
+    extraRates?: readonly import('../rules/withholding').AtcRateRule[]
+  } = {},
 ): WithholdingResult {
-  const rule = rules.atc(date, atc)
+  const rule = rules.atc(date, atc) ?? options.extraRates?.find((r) => r.atc === atc)
   if (!rule) throw new Error(`Unknown ATC "${atc}" for ${date} — add it to the withholding rules table`)
 
   let higherTierApplied = false
