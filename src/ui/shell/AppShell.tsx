@@ -119,7 +119,9 @@ export function AppShell() {
           >
             Ledgers & audit trail
           </Link>
-          <NavLink to="/app/reports" label="Books, statements & returns" />
+          <NavLink to="/app/books" label="Books of accounts" />
+          <NavLink to="/app/statements" label="Financial statements" />
+          <NavLink to="/app/reports" label="Returns & filings" />
           <NavLink to="/app/close" label="Period close" />
           <p className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Setup

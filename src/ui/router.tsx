@@ -14,6 +14,8 @@ import { ClosePage } from './pages/ClosePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { MasterDataPage } from './pages/MasterDataPage'
 import { LedgerPage } from './pages/LedgerPage'
+import { BooksPage } from './pages/BooksPage'
+import { StatementsPage } from './pages/StatementsPage'
 
 const rootRoute = createRootRoute({ component: Outlet })
 
@@ -79,6 +81,18 @@ const ledgerRoute = createRoute({
   component: LedgerPage,
 })
 
+const booksRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'books',
+  component: BooksPage,
+})
+
+const statementsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'statements',
+  component: StatementsPage,
+})
+
 const routeTree = rootRoute.addChildren([
   landingRoute,
   onboardingRoute,
@@ -90,6 +104,8 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     masterRoute,
     ledgerRoute,
+    booksRoute,
+    statementsRoute,
   ]),
 ])
 
