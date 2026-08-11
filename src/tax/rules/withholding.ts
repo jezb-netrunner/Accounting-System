@@ -63,44 +63,127 @@ export const WITHHOLDING_RULES: readonly WithholdingRuleBlock[] = [
   },
 ]
 
+/** Payroll frequencies the BIR revised withholding tax table publishes columns for. */
+export type PayFrequency = 'daily' | 'weekly' | 'semi_monthly' | 'monthly'
+
 /** Withholding tax on compensation — annualized table mirrors Sec. 24(A). */
 export interface CompensationWithholdingRuleBlock extends EffectivityBlock {
   /** Monthly payroll table (BIR revised withholding tax table). */
   readonly monthlyBrackets: readonly TaxBracket[]
+  /** Full per-frequency tables; `monthly` is the same array as monthlyBrackets. */
+  readonly bracketsByFrequency: Readonly<Record<PayFrequency, readonly TaxBracket[]>>
   /** Annual cap on tax-exempt 13th month pay & other benefits. */
   readonly thirteenthMonthExclusionCentavos: number
   /** Statutory contributions (SSS/PhilHealth/Pag-IBIG) are excluded from the base. */
   readonly deMinimisNote: string
 }
 
+const MONTHLY_2018: readonly TaxBracket[] = [
+  { overCentavos: 0, upToCentavos: P(20_833), baseTaxCentavos: 0, marginalRate: pct(0) },
+  { overCentavos: P(20_833), upToCentavos: P(33_333), baseTaxCentavos: 0, marginalRate: pct(20) },
+  { overCentavos: P(33_333), upToCentavos: P(66_667), baseTaxCentavos: P(2_500), marginalRate: pct(25) },
+  { overCentavos: P(66_667), upToCentavos: P(166_667), baseTaxCentavos: P(10_833) + 33, marginalRate: pct(30) },
+  { overCentavos: P(166_667), upToCentavos: P(666_667), baseTaxCentavos: P(40_833) + 33, marginalRate: pct(32) },
+  { overCentavos: P(666_667), upToCentavos: null, baseTaxCentavos: P(200_833) + 33, marginalRate: pct(35) },
+]
+
+// TODO: verify — semi-monthly/weekly/daily 2018-2022 columns transcribed from
+// the RR 8-2018 revised withholding tax table; confirm against the BIR annex.
+const SEMI_MONTHLY_2018: readonly TaxBracket[] = [
+  { overCentavos: 0, upToCentavos: P(10_417), baseTaxCentavos: 0, marginalRate: pct(0) },
+  { overCentavos: P(10_417), upToCentavos: P(16_667), baseTaxCentavos: 0, marginalRate: pct(20) },
+  { overCentavos: P(16_667), upToCentavos: P(33_333), baseTaxCentavos: P(1_250), marginalRate: pct(25) },
+  { overCentavos: P(33_333), upToCentavos: P(83_333), baseTaxCentavos: P(5_416) + 67, marginalRate: pct(30) },
+  { overCentavos: P(83_333), upToCentavos: P(333_333), baseTaxCentavos: P(20_416) + 67, marginalRate: pct(32) },
+  { overCentavos: P(333_333), upToCentavos: null, baseTaxCentavos: P(100_416) + 67, marginalRate: pct(35) },
+]
+
+// TODO: verify — see SEMI_MONTHLY_2018 note.
+const WEEKLY_2018: readonly TaxBracket[] = [
+  { overCentavos: 0, upToCentavos: P(4_808), baseTaxCentavos: 0, marginalRate: pct(0) },
+  { overCentavos: P(4_808), upToCentavos: P(7_692), baseTaxCentavos: 0, marginalRate: pct(20) },
+  { overCentavos: P(7_692), upToCentavos: P(15_385), baseTaxCentavos: P(576) + 92, marginalRate: pct(25) },
+  { overCentavos: P(15_385), upToCentavos: P(38_462), baseTaxCentavos: P(2_500), marginalRate: pct(30) },
+  { overCentavos: P(38_462), upToCentavos: P(153_846), baseTaxCentavos: P(9_423) + 8, marginalRate: pct(32) },
+  { overCentavos: P(153_846), upToCentavos: null, baseTaxCentavos: P(46_346) + 15, marginalRate: pct(35) },
+]
+
+// TODO: verify — see SEMI_MONTHLY_2018 note.
+const DAILY_2018: readonly TaxBracket[] = [
+  { overCentavos: 0, upToCentavos: P(685), baseTaxCentavos: 0, marginalRate: pct(0) },
+  { overCentavos: P(685), upToCentavos: P(1_096), baseTaxCentavos: 0, marginalRate: pct(20) },
+  { overCentavos: P(1_096), upToCentavos: P(2_192), baseTaxCentavos: P(82) + 19, marginalRate: pct(25) },
+  { overCentavos: P(2_192), upToCentavos: P(5_479), baseTaxCentavos: P(356) + 16, marginalRate: pct(30) },
+  { overCentavos: P(5_479), upToCentavos: P(21_918), baseTaxCentavos: P(1_342) + 47, marginalRate: pct(32) },
+  { overCentavos: P(21_918), upToCentavos: null, baseTaxCentavos: P(6_602) + 74, marginalRate: pct(35) },
+]
+
+const MONTHLY_2023: readonly TaxBracket[] = [
+  { overCentavos: 0, upToCentavos: P(20_833), baseTaxCentavos: 0, marginalRate: pct(0) },
+  { overCentavos: P(20_833), upToCentavos: P(33_333), baseTaxCentavos: 0, marginalRate: pct(15) },
+  { overCentavos: P(33_333), upToCentavos: P(66_667), baseTaxCentavos: P(1_875), marginalRate: pct(20) },
+  { overCentavos: P(66_667), upToCentavos: P(166_667), baseTaxCentavos: P(8_541) + 80, marginalRate: pct(25) },
+  { overCentavos: P(166_667), upToCentavos: P(666_667), baseTaxCentavos: P(33_541) + 80, marginalRate: pct(30) },
+  { overCentavos: P(666_667), upToCentavos: null, baseTaxCentavos: P(183_541) + 80, marginalRate: pct(35) },
+]
+
+// TODO: verify — semi-monthly/weekly/daily 2023+ columns transcribed from the
+// revised withholding tax table effective 2023-01-01; confirm against the BIR annex.
+const SEMI_MONTHLY_2023: readonly TaxBracket[] = [
+  { overCentavos: 0, upToCentavos: P(10_417), baseTaxCentavos: 0, marginalRate: pct(0) },
+  { overCentavos: P(10_417), upToCentavos: P(16_667), baseTaxCentavos: 0, marginalRate: pct(15) },
+  { overCentavos: P(16_667), upToCentavos: P(33_333), baseTaxCentavos: P(937) + 50, marginalRate: pct(20) },
+  { overCentavos: P(33_333), upToCentavos: P(83_333), baseTaxCentavos: P(4_270) + 70, marginalRate: pct(25) },
+  { overCentavos: P(83_333), upToCentavos: P(333_333), baseTaxCentavos: P(16_770) + 70, marginalRate: pct(30) },
+  { overCentavos: P(333_333), upToCentavos: null, baseTaxCentavos: P(91_770) + 70, marginalRate: pct(35) },
+]
+
+// TODO: verify — see SEMI_MONTHLY_2023 note.
+const WEEKLY_2023: readonly TaxBracket[] = [
+  { overCentavos: 0, upToCentavos: P(4_808), baseTaxCentavos: 0, marginalRate: pct(0) },
+  { overCentavos: P(4_808), upToCentavos: P(7_692), baseTaxCentavos: 0, marginalRate: pct(15) },
+  { overCentavos: P(7_692), upToCentavos: P(15_385), baseTaxCentavos: P(432) + 60, marginalRate: pct(20) },
+  { overCentavos: P(15_385), upToCentavos: P(38_462), baseTaxCentavos: P(1_971) + 20, marginalRate: pct(25) },
+  { overCentavos: P(38_462), upToCentavos: P(153_846), baseTaxCentavos: P(7_740) + 45, marginalRate: pct(30) },
+  { overCentavos: P(153_846), upToCentavos: null, baseTaxCentavos: P(42_355) + 65, marginalRate: pct(35) },
+]
+
+// TODO: verify — see SEMI_MONTHLY_2023 note.
+const DAILY_2023: readonly TaxBracket[] = [
+  { overCentavos: 0, upToCentavos: P(685), baseTaxCentavos: 0, marginalRate: pct(0) },
+  { overCentavos: P(685), upToCentavos: P(1_096), baseTaxCentavos: 0, marginalRate: pct(15) },
+  { overCentavos: P(1_096), upToCentavos: P(2_192), baseTaxCentavos: P(61) + 65, marginalRate: pct(20) },
+  { overCentavos: P(2_192), upToCentavos: P(5_479), baseTaxCentavos: P(280) + 85, marginalRate: pct(25) },
+  { overCentavos: P(5_479), upToCentavos: P(21_918), baseTaxCentavos: P(1_102) + 60, marginalRate: pct(30) },
+  { overCentavos: P(21_918), upToCentavos: null, baseTaxCentavos: P(6_034) + 30, marginalRate: pct(35) },
+]
+
 export const COMPENSATION_WITHHOLDING_RULES: readonly CompensationWithholdingRuleBlock[] = [
   {
     effectiveFrom: '2018-01-01',
     effectiveTo: '2022-12-31',
     source: 'RR 8-2018 revised withholding table (2018-2022)',
-    monthlyBrackets: [
-      { overCentavos: 0, upToCentavos: P(20_833), baseTaxCentavos: 0, marginalRate: pct(0) },
-      { overCentavos: P(20_833), upToCentavos: P(33_333), baseTaxCentavos: 0, marginalRate: pct(20) },
-      { overCentavos: P(33_333), upToCentavos: P(66_667), baseTaxCentavos: P(2_500), marginalRate: pct(25) },
-      { overCentavos: P(66_667), upToCentavos: P(166_667), baseTaxCentavos: P(10_833) + 33, marginalRate: pct(30) },
-      { overCentavos: P(166_667), upToCentavos: P(666_667), baseTaxCentavos: P(40_833) + 33, marginalRate: pct(32) },
-      { overCentavos: P(666_667), upToCentavos: null, baseTaxCentavos: P(200_833) + 33, marginalRate: pct(35) },
-    ],
+    monthlyBrackets: MONTHLY_2018,
+    bracketsByFrequency: {
+      daily: DAILY_2018,
+      weekly: WEEKLY_2018,
+      semi_monthly: SEMI_MONTHLY_2018,
+      monthly: MONTHLY_2018,
+    },
     thirteenthMonthExclusionCentavos: P(90_000),
     deMinimisNote: 'Base excludes mandatory SSS/PhilHealth/Pag-IBIG contributions and de minimis within caps',
   },
   {
     effectiveFrom: '2023-01-01',
     effectiveTo: null,
-    source: 'RR 11-2018 Annex, 2023-onward monthly withholding table',
-    monthlyBrackets: [
-      { overCentavos: 0, upToCentavos: P(20_833), baseTaxCentavos: 0, marginalRate: pct(0) },
-      { overCentavos: P(20_833), upToCentavos: P(33_333), baseTaxCentavos: 0, marginalRate: pct(15) },
-      { overCentavos: P(33_333), upToCentavos: P(66_667), baseTaxCentavos: P(1_875), marginalRate: pct(20) },
-      { overCentavos: P(66_667), upToCentavos: P(166_667), baseTaxCentavos: P(8_541) + 80, marginalRate: pct(25) },
-      { overCentavos: P(166_667), upToCentavos: P(666_667), baseTaxCentavos: P(33_541) + 80, marginalRate: pct(30) },
-      { overCentavos: P(666_667), upToCentavos: null, baseTaxCentavos: P(183_541) + 80, marginalRate: pct(35) },
-    ],
+    source: 'RR 11-2018 Annex, 2023-onward withholding table',
+    monthlyBrackets: MONTHLY_2023,
+    bracketsByFrequency: {
+      daily: DAILY_2023,
+      weekly: WEEKLY_2023,
+      semi_monthly: SEMI_MONTHLY_2023,
+      monthly: MONTHLY_2023,
+    },
     thirteenthMonthExclusionCentavos: P(90_000),
     deMinimisNote: 'Base excludes mandatory SSS/PhilHealth/Pag-IBIG contributions and de minimis within caps',
   },
