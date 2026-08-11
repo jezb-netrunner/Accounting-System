@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PH Books — Bookkeeping &amp; BIR filing for Philippine businesses</title>
+    <script>
+      // GitHub Pages SPA fallback (counterpart of public/404.html):
+      // 404.html encodes the requested deep-link path into a query string and
+      // redirects here; this script restores the real URL before the router
+      // boots, so history-mode (hash-free) routing works on static hosting.
+      ;(function (l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search
+            .slice(1)
+            .split('&')
+            .map(function (s) {
+              return s.replace(/~and~/g, '&')
+            })
+            .join('?')
+          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash)
+        }
+      })(window.location)
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
