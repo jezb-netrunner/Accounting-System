@@ -220,18 +220,24 @@ describe('period close', () => {
     const draft = sheet({ id: 's-9', documentNo: 'SI-0009' })
     const failing = validatePeriodClose({
       period: { year: 2026, month: 3 },
+      profile: null,
       sheets: [postedSheet, draft],
       entries: [entry],
+      accounts,
       locks: [],
+      generatedReturns: [],
     })
     expect(failing.find((c) => c.id === 'no_draft_sheets')?.passed).toBe(false)
 
     const lock = lockPeriod({
       companyId: 'co-1',
       period: { year: 2026, month: 3 },
+      profile: null,
       sheets: [postedSheet],
       entries: [entry],
+      accounts,
       locks: [],
+      generatedReturns: [],
       lockedBy: 'tester',
       now: '2026-04-05T00:00:00Z',
     })
