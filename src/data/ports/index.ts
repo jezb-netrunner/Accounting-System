@@ -13,6 +13,7 @@ import type {
 import type { PeriodLock } from '../../domain/periodClose'
 import type { Sheet } from '../../domain/sheets'
 import type { TaxProfile } from '../../domain/taxProfile'
+import type { GeneratedReturn } from '../../reports/returns/context'
 
 /**
  * Repository ports. EVERY read/write in the app goes through these
@@ -118,6 +119,13 @@ export interface AuditRepository {
   list(companyId: CompanyId, limit?: number): Promise<AuditEvent[]>
 }
 
+export interface GeneratedReturnRepository {
+  list(companyId: CompanyId): Promise<GeneratedReturn[]>
+  /** Regenerating the same form+period replaces the snapshot. */
+  save(generated: GeneratedReturn): Promise<void>
+  delete(id: string): Promise<void>
+}
+
 /**
  * One atomic post: the sheet flips to posted (with its final document
  * number) and the journal entry appends in a single storage transaction —
@@ -144,6 +152,7 @@ export interface DataPort {
   readonly journal: JournalRepository
   readonly periodLocks: PeriodLockRepository
   readonly audit: AuditRepository
+  readonly generatedReturns: GeneratedReturnRepository
 }
 
 export type { Period }

@@ -15,6 +15,7 @@ import { formatDocumentNo } from '../../../domain/masterData'
 import type { PeriodLock } from '../../../domain/periodClose'
 import type { Sheet } from '../../../domain/sheets'
 import type { TaxProfile } from '../../../domain/taxProfile'
+import type { GeneratedReturn } from '../../../reports/returns/context'
 import type { Company, DataPort } from '../../ports'
 
 /**
@@ -44,6 +45,7 @@ class PhBooksDB extends Dexie {
   journal!: Table<JournalEntry, string>
   periodLocks!: Table<PeriodLock, [string, string]>
   audit!: Table<AuditEvent, string>
+  generatedReturns!: Table<GeneratedReturn, string>
 
   constructor(name = 'ph-books') {
     super(name)
@@ -65,6 +67,9 @@ class PhBooksDB extends Dexie {
     })
     this.version(3).stores({
       audit: 'id, companyId, [companyId+at]',
+    })
+    this.version(4).stores({
+      generatedReturns: 'id, companyId, [companyId+formCode]',
     })
   }
 }
@@ -296,6 +301,16 @@ export function createLocalAdapter(dbName?: string): DataPort {
       list: async (companyId, limit = 500) => {
         const rows = await db.audit.where('companyId').equals(companyId).toArray()
         return rows.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit)
+      },
+    },
+
+    generatedReturns: {
+      list: (companyId) => db.generatedReturns.where('companyId').equals(companyId).toArray(),
+      save: async (generated) => {
+        await db.generatedReturns.put(generated)
+      },
+      delete: async (id) => {
+        await db.generatedReturns.delete(id)
       },
     },
   }
