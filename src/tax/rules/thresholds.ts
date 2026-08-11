@@ -26,6 +26,8 @@ export interface ThresholdRuleBlock extends EffectivityBlock {
    * purposes); services recognize output tax on invoice, not collection.
    */
   readonly invoiceBasedRecognitionForServices: boolean
+  /** ₱500 annual registration fee (form 0605) — abolished by EOPT; null = no fee. */
+  readonly annualRegistrationFeeCentavos: number | null
 }
 
 const P = (pesos: number) => pesos * 100
@@ -53,6 +55,7 @@ export const THRESHOLD_RULES: readonly ThresholdRuleBlock[] = [
       gifts_annual: P(5_000),
     },
     invoiceBasedRecognitionForServices: false,
+    annualRegistrationFeeCentavos: P(500),
   },
   {
     effectiveFrom: '2024-01-01',
@@ -74,5 +77,6 @@ export const THRESHOLD_RULES: readonly ThresholdRuleBlock[] = [
       gifts_annual: P(5_000),
     },
     invoiceBasedRecognitionForServices: true,
+    annualRegistrationFeeCentavos: null,
   },
 ]
