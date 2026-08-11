@@ -111,6 +111,14 @@ export function AppShell() {
           <p className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Output
           </p>
+          <Link
+            to="/app/ledger/$view"
+            params={{ view: 'gl' }}
+            className="block rounded-md px-2 py-1.5 text-slate-600 hover:bg-slate-100"
+            activeProps={{ className: 'block rounded-md px-2 py-1.5 bg-brand-50 text-brand-700 font-medium' }}
+          >
+            Ledgers & audit trail
+          </Link>
           <NavLink to="/app/reports" label="Books, statements & returns" />
           <NavLink to="/app/close" label="Period close" />
           <p className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">

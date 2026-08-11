@@ -13,6 +13,7 @@ import { ReportsPage } from './pages/ReportsPage'
 import { ClosePage } from './pages/ClosePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { MasterDataPage } from './pages/MasterDataPage'
+import { LedgerPage } from './pages/LedgerPage'
 
 const rootRoute = createRootRoute({ component: Outlet })
 
@@ -44,6 +45,8 @@ const sheetsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: 'sheets/$sheetType',
   component: SheetsPage,
+  validateSearch: (search: Record<string, unknown>): { open?: string } =>
+    typeof search.open === 'string' ? { open: search.open } : {},
 })
 
 const reportsRoute = createRoute({
@@ -70,6 +73,12 @@ const masterRoute = createRoute({
   component: MasterDataPage,
 })
 
+const ledgerRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'ledger/$view',
+  component: LedgerPage,
+})
+
 const routeTree = rootRoute.addChildren([
   landingRoute,
   onboardingRoute,
@@ -80,6 +89,7 @@ const routeTree = rootRoute.addChildren([
     closeRoute,
     settingsRoute,
     masterRoute,
+    ledgerRoute,
   ]),
 ])
 

@@ -1,4 +1,5 @@
 import type { Account } from '../../domain/coa'
+import type { AuditEvent } from '../../domain/audit'
 import type { CompanyId, Period, RegisteredParty } from '../../domain/core'
 import type { JournalEntry } from '../../domain/journal'
 import type {
@@ -106,8 +107,15 @@ export interface JournalRepository {
 
 export interface PeriodLockRepository {
   list(companyId: CompanyId): Promise<PeriodLock[]>
-  /** Locks are also append-only; unlocking is an explicit, audited feature for later. */
   append(lock: PeriodLock): Promise<void>
+  /** Unlocking is explicit and always paired with an audit row by the caller. */
+  remove(companyId: CompanyId, periodKey: string): Promise<void>
+}
+
+export interface AuditRepository {
+  append(event: AuditEvent): Promise<void>
+  /** Newest first. */
+  list(companyId: CompanyId, limit?: number): Promise<AuditEvent[]>
 }
 
 /**
@@ -135,6 +143,7 @@ export interface DataPort {
   readonly sheets: SheetRepository
   readonly journal: JournalRepository
   readonly periodLocks: PeriodLockRepository
+  readonly audit: AuditRepository
 }
 
 export type { Period }

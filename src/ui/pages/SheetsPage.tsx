@@ -1,9 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { useBlocker, useParams } from '@tanstack/react-router'
+import { useBlocker, useParams, useSearch } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { dataPort } from '../../data'
+import { auditEvent } from '../../domain/audit'
 import { atcCodeToRule } from '../../domain/masterData'
-import { postSheetDocument } from '../../domain/postingService'
+import {
+  draftCorrectionCopy,
+  postSheetDocument,
+  reverseSheetEntry,
+} from '../../domain/postingService'
 import {
   SHEET_TYPE_LABELS,
   isSaleSheet,
@@ -98,8 +103,9 @@ const freshEditor = (): EditorState => ({
 
 export function SheetsPage() {
   const { sheetType } = useParams({ from: '/app/sheets/$sheetType' }) as { sheetType: SheetType }
+  const { open } = useSearch({ from: '/app/sheets/$sheetType' }) as { open?: string }
   const companyId = useSelectedCompanyId()
-  const { accounts, profile, parties, sheets, locks } = useCompanyData(companyId)
+  const { accounts, profile, parties, sheets, locks, entries } = useCompanyData(companyId)
   const invalidate = useInvalidateCompany()
 
   const employeesQ = useQuery({
@@ -135,6 +141,18 @@ export function SheetsPage() {
     setDirty(false)
     setMessage(null)
   }, [sheetType, companyId])
+
+  // Deep link from ledger drill-through: /app/sheets/<type>?open=<sheetId>
+  const openedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!open || openedRef.current === open) return
+    const s = (sheets.data ?? []).find((x) => x.id === open)
+    if (s) {
+      openedRef.current = open
+      openSheet(s)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sheets.data])
 
   // Unsaved-change guards: tab close + in-app navigation.
   useEffect(() => {
@@ -516,7 +534,15 @@ export function SheetsPage() {
   const saveDraft = async () => {
     const s = buildSheet()
     if ('error' in s) return setMessage({ kind: 'error', text: s.error })
-    await dataPort().sheets.saveDraft(s)
+    const port = dataPort()
+    const before = editor.sheetId ? await port.sheets.get(editor.sheetId) : null
+    await port.sheets.saveDraft(s)
+    await port.audit.append(
+      auditEvent(companyId, 'draft_saved', `sheet:${s.id}`, `${SHEET_TYPE_LABELS[sheetType]} draft saved`, {
+        before: before ?? undefined,
+        after: s,
+      }),
+    )
     setEditor((e) => ({ ...e, sheetId: s.id }))
     setDirty(false)
     invalidate(companyId)
@@ -526,11 +552,66 @@ export function SheetsPage() {
   const deleteDraft = async () => {
     if (!editor.sheetId) return
     if (!window.confirm('Delete this draft?')) return
-    await dataPort().sheets.deleteDraft(editor.sheetId)
+    const port = dataPort()
+    const before = await port.sheets.get(editor.sheetId)
+    await port.sheets.deleteDraft(editor.sheetId)
+    await port.audit.append(
+      auditEvent(companyId, 'draft_deleted', `sheet:${editor.sheetId}`, `${SHEET_TYPE_LABELS[sheetType]} draft deleted`, {
+        before: before ?? undefined,
+      }),
+    )
     setEditor(freshEditor())
     setDirty(false)
     invalidate(companyId)
     setMessage({ kind: 'ok', text: 'Draft deleted' })
+  }
+
+  const currentSheet = editor.sheetId ? (sheets.data ?? []).find((s) => s.id === editor.sheetId) : null
+  const postedEntry = currentSheet?.postedEntryId
+    ? (entries.data ?? []).find((e) => e.id === currentSheet.postedEntryId)
+    : null
+  const reversalOfPosted = postedEntry
+    ? (entries.data ?? []).find((e) => e.reversalOfEntryId === postedEntry.id)
+    : null
+
+  const reversePosted = async () => {
+    if (!postedEntry) return
+    const reason = window.prompt('Reason for the reversal?')
+    if (!reason) return
+    try {
+      const reversal = await reverseSheetEntry(dataPort(), {
+        original: postedEntry,
+        reason,
+        date: today(),
+        locks: locks.data ?? [],
+        now: new Date().toISOString(),
+      })
+      invalidate(companyId)
+      setMessage({ kind: 'ok', text: `Reversed by entry #${reversal.entryNo}` })
+    } catch (err) {
+      setMessage({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  const correctPosted = async () => {
+    if (!currentSheet || !postedEntry) return
+    const reason = window.prompt('Reason for the correction? (reverses, then drafts a copy)')
+    if (!reason) return
+    try {
+      await reverseSheetEntry(dataPort(), {
+        original: postedEntry,
+        reason,
+        date: today(),
+        locks: locks.data ?? [],
+        now: new Date().toISOString(),
+      })
+      const copy = await draftCorrectionCopy(dataPort(), currentSheet)
+      invalidate(companyId)
+      openSheet(copy)
+      setMessage({ kind: 'ok', text: `Reversed ${currentSheet.documentNo}; edit and post the correction below` })
+    } catch (err) {
+      setMessage({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
+    }
   }
 
   const post = async () => {
@@ -761,6 +842,30 @@ export function SheetsPage() {
               <button onClick={() => void deleteDraft()} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
                 Delete draft
               </button>
+            )}
+          </div>
+        )}
+
+        {editor.readOnly && currentSheet && (
+          <div className="mt-4 flex items-center gap-2">
+            {postedEntry && (
+              <span className="text-sm text-slate-500">
+                Posted as entry <span className="font-medium">#{postedEntry.entryNo}</span>
+              </span>
+            )}
+            {reversalOfPosted ? (
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                Reversed by entry #{reversalOfPosted.entryNo}
+              </span>
+            ) : (
+              <>
+                <button onClick={() => void reversePosted()} className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50">
+                  Reverse…
+                </button>
+                <button onClick={() => void correctPosted()} className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50">
+                  Correct (reverse &amp; re-draft)…
+                </button>
+              </>
             )}
           </div>
         )}

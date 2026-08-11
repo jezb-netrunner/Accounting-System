@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import type { AuditEvent } from '../../../domain/audit'
 import type { Account } from '../../../domain/coa'
 import type { CompanyId } from '../../../domain/core'
 import type { JournalEntry } from '../../../domain/journal'
@@ -42,6 +43,7 @@ class PhBooksDB extends Dexie {
   sheets!: Table<Sheet, string>
   journal!: Table<JournalEntry, string>
   periodLocks!: Table<PeriodLock, [string, string]>
+  audit!: Table<AuditEvent, string>
 
   constructor(name = 'ph-books') {
     super(name)
@@ -60,6 +62,9 @@ class PhBooksDB extends Dexie {
     })
     this.version(2).stores({
       atcCodes: 'id, companyId',
+    })
+    this.version(3).stores({
+      audit: 'id, companyId, [companyId+at]',
     })
   }
 }
@@ -278,6 +283,19 @@ export function createLocalAdapter(dbName?: string): DataPort {
       list: (companyId) => db.periodLocks.where('companyId').equals(companyId).toArray(),
       append: async (lock) => {
         await db.periodLocks.add(lock)
+      },
+      remove: async (companyId, periodKey) => {
+        await db.periodLocks.delete([companyId, periodKey])
+      },
+    },
+
+    audit: {
+      append: async (event) => {
+        await db.audit.add(event)
+      },
+      list: async (companyId, limit = 500) => {
+        const rows = await db.audit.where('companyId').equals(companyId).toArray()
+        return rows.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit)
       },
     },
   }

@@ -42,5 +42,6 @@ export function createSupabaseAdapter(): DataPort {
     sheets: stub('sheets'),
     journal: stub('journal'),
     periodLocks: stub('periodLocks'),
+    audit: stub('audit'),
   }
 }

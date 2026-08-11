@@ -1,7 +1,8 @@
 import type { DataPort } from '../data/ports'
 import type { AtcRateRule } from '../tax/rules/withholding'
+import { auditEvent } from './audit'
 import type { Account } from './coa'
-import type { JournalEntry } from './journal'
+import { reverseEntry, type JournalEntry } from './journal'
 import type { Party } from './masterData'
 import { assertPostingAllowed, type PeriodLock } from './periodClose'
 import { indexAccounts, postSheet } from './posting'
@@ -64,5 +65,77 @@ export async function postSheetDocument(
   const entry = buildEntry(draft)
   const posted: Sheet = { ...draft, status: 'posted', postedEntryId: entry.id }
   await port.postDocument({ sheet: posted, entry })
+  await port.audit.append(
+    auditEvent(
+      req.sheet.companyId,
+      'sheet_posted',
+      `sheet:${documentNo}`,
+      `${req.sheet.type.replace(/_/g, ' ')} ${documentNo} posted as entry #${entryNo}`,
+      { at: req.now },
+    ),
+  )
   return { entry, documentNo }
+}
+
+/**
+ * Reversal: a mirrored entry referencing the original. The original stays
+ * untouched (immutable); the reversal posts into an OPEN period — locked
+ * history is corrected forward, never rewritten.
+ */
+export async function reverseSheetEntry(
+  port: DataPort,
+  req: {
+    original: JournalEntry
+    reason: string
+    date: string
+    locks: readonly PeriodLock[]
+    now: string
+  },
+): Promise<JournalEntry> {
+  assertPostingAllowed(req.date, req.locks)
+  const entryNo = await port.journal.nextEntryNo(req.original.companyId)
+  const reversal = reverseEntry(req.original, {
+    id: `${req.original.companyId}:je:${entryNo}`,
+    entryNo,
+    date: req.date,
+    postedAt: req.now,
+    reason: req.reason,
+  })
+  await port.journal.append(reversal)
+  await port.audit.append(
+    auditEvent(
+      req.original.companyId,
+      'entry_reversed',
+      `entry:${req.original.entryNo}`,
+      `Entry #${req.original.entryNo} reversed by #${entryNo}: ${req.reason}`,
+      { at: req.now },
+    ),
+  )
+  return reversal
+}
+
+/**
+ * Correction = reverse, then re-post as a NEW document: this drafts the
+ * copy (fresh id, no document number — the series assigns one when the
+ * corrected document posts).
+ */
+export async function draftCorrectionCopy(port: DataPort, source: Sheet): Promise<Sheet> {
+  const copy: Sheet = {
+    ...source,
+    id: `${source.companyId}:${source.type}:${crypto.randomUUID()}`,
+    documentNo: '',
+    status: 'draft',
+    postedEntryId: null,
+    memo: source.memo || `Correction of ${source.documentNo}`,
+  }
+  await port.sheets.saveDraft(copy)
+  await port.audit.append(
+    auditEvent(
+      source.companyId,
+      'correction_drafted',
+      `sheet:${source.documentNo}`,
+      `Correction draft created from ${source.documentNo}`,
+    ),
+  )
+  return copy
 }
