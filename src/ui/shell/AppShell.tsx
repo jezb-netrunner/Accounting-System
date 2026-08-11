@@ -113,6 +113,10 @@ export function AppShell() {
           </p>
           <NavLink to="/app/reports" label="Books, statements & returns" />
           <NavLink to="/app/close" label="Period close" />
+          <p className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Setup
+          </p>
+          <NavLink to="/app/settings" label="Registration & settings" />
         </nav>
         <div className="border-t border-slate-100 p-3">
           <Link to="/onboarding" className="block rounded-md px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100">

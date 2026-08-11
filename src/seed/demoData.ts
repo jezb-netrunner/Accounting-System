@@ -5,7 +5,7 @@ import type { Party } from '../domain/masterData'
 import { indexAccounts, postSheet } from '../domain/posting'
 import type { Sheet, SheetLine } from '../domain/sheets'
 import type { TaxProfile } from '../domain/taxProfile'
-import { STANDARD_PH_COA } from './coaTemplates'
+import { coaTemplateForProfile } from './coaTemplates'
 import {
   EIGHT_PERCENT_PROFESSIONAL_PROFILE,
   PERCENTAGE_TAX_SOLE_PROPRIETOR_PROFILE,
@@ -268,7 +268,7 @@ export async function seedDemoData(port: DataPort): Promise<{ seeded: string[] }
     await port.companies.save(demo.company)
     await port.taxProfiles.save(demo.company.id, demo.profile)
 
-    const accounts = instantiateTemplate(demo.company.id, STANDARD_PH_COA)
+    const accounts = instantiateTemplate(demo.company.id, coaTemplateForProfile(demo.profile))
     await port.accounts.saveMany(accounts)
     const idx = indexAccounts(accounts)
 

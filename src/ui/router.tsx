@@ -11,6 +11,7 @@ import { Dashboard } from './pages/Dashboard'
 import { SheetsPage } from './pages/SheetsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { ClosePage } from './pages/ClosePage'
+import { SettingsPage } from './pages/SettingsPage'
 
 const rootRoute = createRootRoute({ component: Outlet })
 
@@ -56,10 +57,16 @@ const closeRoute = createRoute({
   component: ClosePage,
 })
 
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'settings',
+  component: SettingsPage,
+})
+
 const routeTree = rootRoute.addChildren([
   landingRoute,
   onboardingRoute,
-  appRoute.addChildren([dashboardRoute, sheetsRoute, reportsRoute, closeRoute]),
+  appRoute.addChildren([dashboardRoute, sheetsRoute, reportsRoute, closeRoute, settingsRoute]),
 ])
 
 /**
