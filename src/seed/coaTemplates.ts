@@ -1,4 +1,5 @@
 import type { AccountTemplateRow } from '../domain/coa'
+import type { TaxProfile } from '../domain/taxProfile'
 
 /**
  * Standard PH SME chart of accounts template. Onboarding instantiates it per
@@ -13,6 +14,7 @@ export const STANDARD_PH_COA: readonly AccountTemplateRow[] = [
   { code: '1110', name: 'Cash in Bank', type: 'asset', taxTag: 'none', parentCode: '1000' },
   { code: '1200', name: 'Accounts Receivable — Trade', type: 'asset', taxTag: 'none', systemRole: 'accounts_receivable', parentCode: '1000' },
   { code: '1250', name: 'Creditable Withholding Tax (2307/2306)', type: 'asset', taxTag: 'creditable_wtax_receivable', parentCode: '1000' },
+  { code: '1260', name: 'Creditable VAT Withheld (Government)', type: 'asset', taxTag: 'creditable_vat_withheld', parentCode: '1000' },
   { code: '1300', name: 'Inventory', type: 'asset', taxTag: 'none', systemRole: 'inventory', parentCode: '1000' },
   { code: '1400', name: 'Input VAT', type: 'asset', taxTag: 'input_vat', parentCode: '1000' },
   { code: '1410', name: 'Deferred Input VAT (capital goods)', type: 'asset', taxTag: 'deferred_input_vat', parentCode: '1000' },
@@ -58,3 +60,33 @@ export const STANDARD_PH_COA: readonly AccountTemplateRow[] = [
   { code: '5800', name: 'Depreciation', type: 'expense', taxTag: 'none', parentCode: '5000' },
   { code: '5900', name: 'Miscellaneous Expense', type: 'expense', taxTag: 'none', parentCode: '5000' },
 ]
+
+const VAT_ONLY_CODES = new Set(['1260', '1400', '1410', '2200', '2210', '4110', '4120'])
+const PERCENTAGE_ONLY_CODES = new Set(['2410'])
+const PAYROLL_CODES = new Set(['2320', '2330', '2500', '5200', '5210'])
+const EWT_CODES = new Set(['2300'])
+const FWT_CODES = new Set(['2310'])
+const DST_CODES = new Set(['2420'])
+
+/**
+ * The chart a company starts from varies by profile: VAT accounts only for
+ * VAT registrants, payroll accounts only with employees, and so on. The user
+ * can still add/rename/deactivate/re-map accounts before going live — this
+ * only decides the starting point.
+ */
+export function coaTemplateForProfile(profile: TaxProfile): AccountTemplateRow[] {
+  const isVat = profile.registeredTaxTypes.has('vat')
+  const rows = STANDARD_PH_COA.filter((r) => {
+    if (VAT_ONLY_CODES.has(r.code)) return isVat
+    if (PERCENTAGE_ONLY_CODES.has(r.code)) return profile.registeredTaxTypes.has('percentage_tax')
+    if (PAYROLL_CODES.has(r.code)) return profile.withholdingAgent.compensation
+    if (EWT_CODES.has(r.code)) return profile.withholdingAgent.expanded
+    if (FWT_CODES.has(r.code)) return profile.withholdingAgent.final
+    if (DST_CODES.has(r.code)) return profile.registeredTaxTypes.has('documentary_stamp_tax')
+    return true
+  })
+  // Without the VAT split there is one revenue line; name it plainly.
+  return rows.map((r) =>
+    !isVat && r.code === '4100' ? { ...r, name: 'Sales / Service Income' } : r,
+  )
+}

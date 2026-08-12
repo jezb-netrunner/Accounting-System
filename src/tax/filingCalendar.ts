@@ -66,6 +66,26 @@ export function filingCalendar(profile: TaxProfile, period: Period): FilingOblig
 }
 
 /**
+ * Every obligation whose deadline falls inside [fromPeriod, toPeriod] — the
+ * profile+range view: a non-VAT professional never sees a 2550Q here, and
+ * deadlines honor the profile's fiscal year end, not just calendar quarters.
+ */
+export function filingCalendarRange(
+  profile: TaxProfile,
+  fromPeriod: Period,
+  toPeriod: Period,
+): FilingObligation[] {
+  const out: FilingObligation[] = []
+  let p = fromPeriod
+  for (let guard = 0; guard < 120; guard++) {
+    out.push(...filingCalendar(profile, p))
+    if (p.year === toPeriod.year && p.month === toPeriod.month) break
+    p = addMonths(p, 1)
+  }
+  return out
+}
+
+/**
  * Obligations *arising from* activity in month `p` (their deadlines fall in
  * later months). The month view above filters these by deadline.
  */

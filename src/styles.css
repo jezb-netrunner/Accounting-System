@@ -14,6 +14,32 @@
   @apply w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500;
 }
 
+/* Print views: only the .print-area is visible when printing; each
+   .print-page is one physical page with its own repeated headers. */
+@media print {
+  body.printing * {
+    visibility: hidden;
+  }
+  body.printing .print-area,
+  body.printing .print-area * {
+    visibility: visible;
+  }
+  body.printing .print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: white;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .print-page {
+    page-break-after: always;
+  }
+  .print-page:last-child {
+    page-break-after: auto;
+  }
+}
+
 /* Spreadsheet-grid affordances */
 .sheet-grid input {
   @apply w-full bg-transparent px-2 py-1 text-sm outline-none;

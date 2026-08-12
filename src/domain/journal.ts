@@ -31,9 +31,34 @@ export interface JournalEntry {
 }
 
 export class UnbalancedEntryError extends Error {
-  constructor(debits: Money, credits: Money) {
-    super(`Journal entry does not balance: debits ${debits.format()} ≠ credits ${credits.format()}`)
+  constructor(debits: Money, credits: Money, hint?: string) {
+    super(
+      `Journal entry does not balance: debits ${debits.format()} ≠ credits ${credits.format()} ` +
+        `(off by ${debits.subtract(credits).abs().format()})${hint ? `. ${hint}` : ''}`,
+    )
   }
+}
+
+/** Point at the line most likely at fault for an imbalance. */
+function diagnoseImbalance(lines: readonly JournalLine[], diffCentavos: number): string | undefined {
+  const abs = Math.abs(diffCentavos)
+  // A line whose amount equals the whole difference is probably missing its counterpart.
+  const missing = lines.findIndex((l) => l.debitCentavos === abs || l.creditCentavos === abs)
+  if (missing !== -1) {
+    return `Line ${missing + 1} ("${lines[missing]!.description}") equals the difference — its counterpart may be missing`
+  }
+  // A line at half the difference on the heavy side would balance if flipped.
+  if (abs % 2 === 0) {
+    const half = abs / 2
+    const heavySide: 'debit' | 'credit' = diffCentavos > 0 ? 'debit' : 'credit'
+    const flip = lines.findIndex((l) =>
+      heavySide === 'debit' ? l.debitCentavos === half : l.creditCentavos === half,
+    )
+    if (flip !== -1) {
+      return `Line ${flip + 1} ("${lines[flip]!.description}") would balance the entry if moved to the ${heavySide === 'debit' ? 'credit' : 'debit'} side`
+    }
+  }
+  return undefined
 }
 
 export class InvalidEntryError extends Error {}
@@ -90,7 +115,13 @@ export function createJournalEntry(input: {
   }
   const debits = sum(lines.map((l) => Money.fromCentavos(l.debitCentavos)))
   const credits = sum(lines.map((l) => Money.fromCentavos(l.creditCentavos)))
-  if (!debits.equals(credits)) throw new UnbalancedEntryError(debits, credits)
+  if (!debits.equals(credits)) {
+    throw new UnbalancedEntryError(
+      debits,
+      credits,
+      diagnoseImbalance(lines, debits.centavos - credits.centavos),
+    )
+  }
 
   const entry: JournalEntry = {
     id: input.id,

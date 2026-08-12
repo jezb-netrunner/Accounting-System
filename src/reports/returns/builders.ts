@@ -45,14 +45,14 @@ const header = (
 })
 
 /** Sum of (credit − debit) over lines with a tag — credit-normal accounts. */
-function creditSum(w: LedgerWindow, ...tags: TaxTag[]): Money {
+export function creditSum(w: LedgerWindow, ...tags: TaxTag[]): Money {
   return foldLines(w, (l) =>
     tags.includes(l.taxTag) ? l.creditCentavos - l.debitCentavos : 0,
   )
 }
 
 /** Sum of (debit − credit) — debit-normal accounts. */
-function debitSum(w: LedgerWindow, ...tags: TaxTag[]): Money {
+export function debitSum(w: LedgerWindow, ...tags: TaxTag[]): Money {
   return foldLines(w, (l) =>
     tags.includes(l.taxTag) ? l.debitCentavos - l.creditCentavos : 0,
   )
@@ -72,7 +72,7 @@ export function build2550Q(company: Company, profile: TaxProfile, w: LedgerWindo
   const outputVat = creditSum(w, 'output_vat')
   const inputVatCurrent = debitSum(w, 'input_vat')
   const inputVatOnCapitalGoods = debitSum(w, 'deferred_input_vat')
-  const creditableVatWithheld = debitSum(w, 'creditable_wtax_receivable')
+  const creditableVatWithheld = debitSum(w, 'creditable_vat_withheld')
   const net = outputVat
     .subtract(inputVatCurrent)
     .subtract(inputVatOnCapitalGoods)
@@ -83,13 +83,14 @@ export function build2550Q(company: Company, profile: TaxProfile, w: LedgerWindo
     outputVat,
     zeroRatedSales: creditSum(w, 'sales_zero_rated'),
     exemptSales: creditSum(w, 'sales_exempt'),
-    governmentSales: Money.ZERO, // needs per-party government split; wired later
-    inputVatCarriedOver: Money.ZERO, // carry-forward state arrives with period close
+    governmentSales: Money.ZERO, // needs per-party government split; see build.ts
+    inputVatCarriedOver: Money.ZERO, // carry-forward state lives in build.ts
     inputVatCurrent,
     inputVatOnCapitalGoods,
     inputVatAllocatedToExempt: Money.ZERO, // allocateInputVat feeds this for mixed profiles
     creditableVatWithheld,
-    netVatPayable: net,
+    netVatPayable: net.isNegative() ? Money.ZERO : net,
+    excessInputVatCarryForward: net.isNegative() ? net.negate() : Money.ZERO,
   }
 }
 

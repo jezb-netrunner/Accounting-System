@@ -19,7 +19,22 @@ export interface CorporateTaxRuleBlock extends EffectivityBlock {
   readonly osdRate: Rate
   /** Special corporate income tax (incentives, e.g. 5% SCIT in lieu of all taxes). */
   readonly specialIncentiveRate: Rate
+  /** NOLCO: net operating loss deductible in the N consecutive years after the loss year. */
+  readonly nolcoCarryoverYears: number
+  /** Loss years with an extended NOLCO window (Bayanihan II: 2020-2021 losses get 5 years). */
+  readonly nolcoExtendedWindows: readonly {
+    readonly lossYearFrom: number
+    readonly lossYearTo: number
+    readonly carryoverYears: number
+  }[]
+  /** Excess MCIT over RCIT creditable against RCIT in the N following years. */
+  readonly mcitExcessCarryoverYears: number
 }
+
+/** RA 11494 (Bayanihan II) + RR 25-2020: losses of 2020 and 2021 carry 5 years. */
+const NOLCO_EXTENDED_WINDOWS = [
+  { lossYearFrom: 2020, lossYearTo: 2021, carryoverYears: 5 },
+] as const
 
 const P = (pesos: number) => pesos * 100
 
@@ -36,6 +51,9 @@ export const CORPORATE_TAX_RULES: readonly CorporateTaxRuleBlock[] = [
     mcitStartYear: 4,
     osdRate: pct(40),
     specialIncentiveRate: pct(5),
+    nolcoCarryoverYears: 3,
+    nolcoExtendedWindows: NOLCO_EXTENDED_WINDOWS,
+    mcitExcessCarryoverYears: 3,
   },
   {
     effectiveFrom: '2020-07-01',
@@ -49,6 +67,9 @@ export const CORPORATE_TAX_RULES: readonly CorporateTaxRuleBlock[] = [
     mcitStartYear: 4,
     osdRate: pct(40),
     specialIncentiveRate: pct(5),
+    nolcoCarryoverYears: 3,
+    nolcoExtendedWindows: NOLCO_EXTENDED_WINDOWS,
+    mcitExcessCarryoverYears: 3,
   },
   {
     effectiveFrom: '2023-07-01',
@@ -62,5 +83,8 @@ export const CORPORATE_TAX_RULES: readonly CorporateTaxRuleBlock[] = [
     mcitStartYear: 4,
     osdRate: pct(40),
     specialIncentiveRate: pct(5),
+    nolcoCarryoverYears: 3,
+    nolcoExtendedWindows: NOLCO_EXTENDED_WINDOWS,
+    mcitExcessCarryoverYears: 3,
   },
 ]

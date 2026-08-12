@@ -65,6 +65,32 @@ export interface LedgerLine {
   readonly runningBalance: Money
 }
 
+/**
+ * One account over a window: opening balance (all activity before `from`),
+ * movements with running balances, and the closing balance.
+ */
+export function accountLedgerWindow(
+  entries: readonly JournalEntry[],
+  accountCode: string,
+  from: ISODate,
+  to: ISODate,
+): { opening: Money; lines: LedgerLine[]; closing: Money } {
+  let opening = Money.ZERO
+  for (const e of entries) {
+    if (e.date >= from) continue
+    for (const l of e.lines) {
+      if (l.accountCode === accountCode) {
+        opening = opening.add(Money.fromCentavos(l.debitCentavos - l.creditCentavos))
+      }
+    }
+  }
+  const inWindow = entries.filter((e) => e.date >= from && e.date <= to)
+  const raw = accountLedger(inWindow, accountCode)
+  const lines = raw.map((l) => ({ ...l, runningBalance: l.runningBalance.add(opening) }))
+  const closing = lines.length ? lines[lines.length - 1]!.runningBalance : opening
+  return { opening, lines, closing }
+}
+
 export function accountLedger(
   entries: readonly JournalEntry[],
   accountCode: string,
