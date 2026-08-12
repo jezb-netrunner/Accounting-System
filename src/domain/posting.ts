@@ -143,8 +143,10 @@ function saleLines(sheet: Sheet, ctx: PostingContext): JournalLineInput[] {
     const acct = accounts.byTag('creditable_wtax_receivable')
     out.push(side(reversed, { accountCode: acct.code, debit: totals.withholdingTotal, taxTag: acct.taxTag }))
   }
+  // Government 5% VAT withheld is a VAT credit (2306), never an income-tax
+  // credit — its own tag keeps it off the SAWT/income-tax CWT line.
   if (!totals.governmentVatWithheld.isZero()) {
-    const acct = accounts.byTag('creditable_wtax_receivable')
+    const acct = accounts.byTag('creditable_vat_withheld')
     out.push(side(reversed, { accountCode: acct.code, debit: totals.governmentVatWithheld, taxTag: acct.taxTag }))
   }
   // Income side, split by VAT class so books and 2550Q derive from tags.
@@ -193,11 +195,18 @@ function purchaseLines(sheet: Sheet, ctx: PostingContext): JournalLineInput[] {
     const acct = accounts.byTag('input_vat')
     out.push(side(reversed, { accountCode: acct.code, debit: totals.vat, taxTag: acct.taxTag }))
   }
-  // What we withhold is a liability to BIR, not part of the payable to the supplier.
-  if (!totals.withholdingTotal.isZero()) {
-    const kind = sheet.lines.some((l) => l.atc?.startsWith('WI2') || l.atc?.startsWith('WC2'))
-    const acct = accounts.byTag(kind ? 'fwt_payable' : 'ewt_payable')
-    out.push(side(reversed, { accountCode: acct.code, credit: totals.withholdingTotal, taxTag: acct.taxTag }))
+  // What we withhold is a liability to BIR, not part of the payable to the
+  // supplier — split by the rule's kind so expanded and final never mix.
+  const withheldByKind = { expanded: Money.ZERO, final: Money.ZERO }
+  for (const d of lines) {
+    if (d.withholding) {
+      withheldByKind[d.withholding.kind] = withheldByKind[d.withholding.kind].add(d.withholding.amount)
+    }
+  }
+  for (const kind of ['expanded', 'final'] as const) {
+    if (withheldByKind[kind].isZero()) continue
+    const acct = accounts.byTag(kind === 'final' ? 'fwt_payable' : 'ewt_payable')
+    out.push(side(reversed, { accountCode: acct.code, credit: withheldByKind[kind], taxTag: acct.taxTag }))
   }
   const payable = totals.amountDue
   out.push(side(reversed, { accountCode: accounts.byRole('accounts_payable').code, credit: payable, partyId: party?.id ?? null }))
@@ -216,8 +225,19 @@ function settlementLines(
   const total = sum(sheet.lines.map((l) => Money.fromCentavos(l.amountCentavos)))
 
   if (settles === 'accounts_receivable') {
+    // Collections credit AR by default; a per-line account override lets a
+    // deposit hit income or another account directly (e.g. cash sales).
     out.push({ accountCode: bank.code, debit: total })
-    out.push({ accountCode: accounts.byRole('accounts_receivable').code, credit: total, partyId: party?.id ?? null })
+    for (const l of sheet.lines) {
+      const acct = l.accountCode ? accounts.byCode(l.accountCode) : accounts.byRole('accounts_receivable')
+      out.push({
+        accountCode: acct.code,
+        credit: Money.fromCentavos(l.amountCentavos),
+        taxTag: acct.taxTag,
+        partyId: party?.id ?? null,
+        description: l.description,
+      })
+    }
     return out
   }
 

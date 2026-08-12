@@ -96,4 +96,14 @@ describe('buildPartyAging (FIFO application)', () => {
     const aging = buildPartyAging(entries, new Set([AR]), '2026-01-31')
     expect(aging.get('A')!.total.format()).toBe('500.00')
   })
+
+  it('applies advances received before the charge instead of dropping them', () => {
+    const entries = [
+      collection('2026-01-05', 'A', 300), // customer advance
+      invoice('2026-01-20', 'A', 500),
+    ]
+    const aging = buildPartyAging(entries, new Set([AR]), '2026-01-31')
+    expect(aging.get('A')!.total.format()).toBe('200.00')
+    expect(aging.get('A')!.current.format()).toBe('200.00')
+  })
 })

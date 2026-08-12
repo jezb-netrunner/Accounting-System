@@ -617,11 +617,17 @@ export function SheetsPage() {
   const post = async () => {
     const s = buildSheet()
     if ('error' in s) return setMessage({ kind: 'error', text: s.error })
-    if (!profile.data) return setMessage({ kind: 'error', text: 'No tax profile in force on this date' })
+    // Resolve the profile IN FORCE ON THE DOCUMENT DATE — a backdated
+    // document computes under the registration of its time, not today's.
+    const effectiveProfile =
+      (await dataPort().taxProfiles.resolveAt(companyId, s.date)) ?? profile.data
+    if (!effectiveProfile) {
+      return setMessage({ kind: 'error', text: 'No tax profile in force on this date' })
+    }
     try {
       const { documentNo, entry } = await postSheetDocument(dataPort(), {
         sheet: s,
-        profile: profile.data,
+        profile: effectiveProfile,
         accounts: accounts.data ?? [],
         party,
         locks: locks.data ?? [],

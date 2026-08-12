@@ -72,7 +72,7 @@ export function build2550Q(company: Company, profile: TaxProfile, w: LedgerWindo
   const outputVat = creditSum(w, 'output_vat')
   const inputVatCurrent = debitSum(w, 'input_vat')
   const inputVatOnCapitalGoods = debitSum(w, 'deferred_input_vat')
-  const creditableVatWithheld = debitSum(w, 'creditable_wtax_receivable')
+  const creditableVatWithheld = debitSum(w, 'creditable_vat_withheld')
   const net = outputVat
     .subtract(inputVatCurrent)
     .subtract(inputVatOnCapitalGoods)

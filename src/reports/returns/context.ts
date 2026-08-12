@@ -42,6 +42,23 @@ export interface ReturnContext {
 const partyOf = (ctx: ReturnContext, id: string | null) =>
   ctx.parties.find((p) => p.id === id) ?? null
 
+/**
+ * Documents whose posted entry has been reversed are corrected history:
+ * the ledger already nets them to zero, so document-derived figures
+ * (returns, QAP, certificates, SLSP) must skip them too or corrections
+ * would double-count against the re-posted document.
+ */
+export function reversedSheetIds(ctx: ReturnContext): ReadonlySet<string> {
+  const reversedEntryIds = new Set(
+    ctx.entries.filter((e) => e.reversalOfEntryId !== null).map((e) => e.reversalOfEntryId!),
+  )
+  return new Set(
+    ctx.sheets
+      .filter((s) => s.postedEntryId && reversedEntryIds.has(s.postedEntryId))
+      .map((s) => s.id),
+  )
+}
+
 const docTaxContext = (ctx: ReturnContext, sheet: Sheet) => {
   const party = partyOf(ctx, sheet.partyId)
   return {
@@ -62,11 +79,14 @@ const docTaxContext = (ctx: ReturnContext, sheet: Sheet) => {
  */
 export function collectWithholdingTxns(ctx: ReturnContext): WithholdingTxn[] {
   const out: WithholdingTxn[] = []
+  const reversed = reversedSheetIds(ctx)
   for (const sheet of ctx.sheets) {
-    if (sheet.status !== 'posted') continue
+    if (sheet.status !== 'posted' || reversed.has(sheet.id)) continue
     const isAgentDoc = isPurchaseSheet(sheet.type) || sheet.type === 'disbursement'
     if (!isAgentDoc) continue
     if (!ctx.profile.withholdingAgent.expanded && !ctx.profile.withholdingAgent.final) continue
+    // A debit memo reduces the purchase, so its withholding enters negative.
+    const sign = sheet.type === 'debit_memo' ? -1 : 1
     const taxCtx = docTaxContext(ctx, sheet)
     for (const line of sheet.lines) {
       if (!line.atc) continue
@@ -81,8 +101,8 @@ export function collectWithholdingTxns(ctx: ReturnContext): WithholdingTxn[] {
         date: sheet.date,
         payeeId: sheet.partyId ?? 'unknown',
         atc: line.atc,
-        base: d.withholding.base,
-        amount: d.withholding.amount,
+        base: sign < 0 ? d.withholding.base.negate() : d.withholding.base,
+        amount: sign < 0 ? d.withholding.amount.negate() : d.withholding.amount,
         kind: d.withholding.kind,
       })
     }
@@ -92,8 +112,16 @@ export function collectWithholdingTxns(ctx: ReturnContext): WithholdingTxn[] {
 
 /** Posted sale documents in a window with their engine-derived totals. */
 export function saleDocuments(ctx: ReturnContext, from: ISODate, to: ISODate) {
+  const reversed = reversedSheetIds(ctx)
   return ctx.sheets
-    .filter((s) => s.status === 'posted' && isSaleSheet(s.type) && s.date >= from && s.date <= to)
+    .filter(
+      (s) =>
+        s.status === 'posted' &&
+        !reversed.has(s.id) &&
+        isSaleSheet(s.type) &&
+        s.date >= from &&
+        s.date <= to,
+    )
     .map((sheet) => {
       const sign = sheet.type === 'credit_memo' ? -1 : 1
       const { totals } = deriveDocumentTotals(
@@ -111,8 +139,16 @@ export function saleDocuments(ctx: ReturnContext, from: ISODate, to: ISODate) {
 
 /** Posted purchase documents in a window with their engine-derived totals. */
 export function purchaseDocuments(ctx: ReturnContext, from: ISODate, to: ISODate) {
+  const reversed = reversedSheetIds(ctx)
   return ctx.sheets
-    .filter((s) => s.status === 'posted' && isPurchaseSheet(s.type) && s.date >= from && s.date <= to)
+    .filter(
+      (s) =>
+        s.status === 'posted' &&
+        !reversed.has(s.id) &&
+        isPurchaseSheet(s.type) &&
+        s.date >= from &&
+        s.date <= to,
+    )
     .map((sheet) => {
       const sign = sheet.type === 'debit_memo' ? -1 : 1
       const { totals } = deriveDocumentTotals(
@@ -131,8 +167,9 @@ export function purchaseDocuments(ctx: ReturnContext, from: ISODate, to: ISODate
 /** Cash actually received in a window (cash-basis gross receipts). */
 export function cashReceipts(ctx: ReturnContext, from: ISODate, to: ISODate): Money {
   let acc = Money.ZERO
+  const reversed = reversedSheetIds(ctx)
   for (const s of ctx.sheets) {
-    if (s.status !== 'posted' || s.date < from || s.date > to) continue
+    if (s.status !== 'posted' || reversed.has(s.id) || s.date < from || s.date > to) continue
     if (s.type === 'collection') {
       acc = s.lines.reduce((a, l) => a.add(Money.fromCentavos(l.amountCentavos)), acc)
     } else if (s.type === 'sales_receipt') {

@@ -14,10 +14,11 @@ import {
   type WithholdingTxn,
 } from '../../tax/engine/withholdingPeriod'
 import {
+  computeCorporateAnnualTax,
   computeCorporateQuarterlyTax,
   computeIndividualQuarterlyTax,
 } from '../../tax/engine/incomeTaxPeriod'
-import { computeCorporateIncomeTax, computeIndividualIncomeTax } from '../../tax/engine/incomeTax'
+import { computeIndividualIncomeTax } from '../../tax/engine/incomeTax'
 import { rules } from '../../tax/rules'
 import type {
   AnnualAlphalistModel,
@@ -32,6 +33,7 @@ import {
   collectWithholdingTxns,
   priorFigure,
   purchaseDocuments,
+  reversedSheetIds,
   saleDocuments,
   sumPriorFiguresInYear,
   type ReturnContext,
@@ -148,8 +150,11 @@ export function buildReturn2551Q(ctx: ReturnContext, from: ISODate, to: ISODate)
     { basis: ctx.profile.accountingBasis, accruedGrossSales: accrued, cashCollections: collected },
     to,
   )
-  // Percentage tax withheld by government payors (creditable) — from sale docs.
-  const withheld = sum(sales.map((s) => (s.sign < 0 ? s.totals.withholdingTotal.negate() : s.totals.withholdingTotal)))
+  // Only percentage tax withheld by government payors (2306, PT ATCs) may be
+  // credited here. Income-tax EWT withheld by customers is an income-tax
+  // credit (2307) and must NOT reduce the 2551Q — those ATCs aren't modeled
+  // as percentage-tax withholding, so this line is zero.
+  const withheld = Money.ZERO
   const model: Form2551Q = {
     header: header('2551Q', ctx, from, to),
     grossReceipts: q.base,
@@ -248,8 +253,9 @@ export function payrollComputations(
   to: ISODate,
 ): PayrollLineComputation[] {
   const out: PayrollLineComputation[] = []
+  const reversed = reversedSheetIds(ctx)
   for (const s of ctx.sheets) {
-    if (s.status !== 'posted' || s.type !== 'payroll_register' || s.date < from || s.date > to) continue
+    if (s.status !== 'posted' || reversed.has(s.id) || s.type !== 'payroll_register' || s.date < from || s.date > to) continue
     for (const l of s.lines) {
       const p = l.payroll
       const r = computePayrollWithholding(
@@ -442,7 +448,9 @@ export function buildReturn1701(ctx: ReturnContext, year: number): BuiltReturn<F
 
 const yearsSinceStart = (ctx: ReturnContext, asOf: ISODate): number => {
   if (!ctx.profile.startOfOperations) return 1
-  return Math.max(1, periodOfDate(asOf).year - periodOfDate(ctx.profile.startOfOperations).year + 1)
+  // Sec. 27(E): MCIT begins on the 4th taxable year FOLLOWING commencement —
+  // commence in year C, first MCIT year is C+4, so the count excludes C.
+  return Math.max(1, periodOfDate(asOf).year - periodOfDate(ctx.profile.startOfOperations).year)
 }
 
 const corporateRegime = (ctx: ReturnContext) =>
@@ -502,19 +510,38 @@ export function buildReturn1702(
   const net = f.grossSalesReceipts.subtract(f.costOfSales).subtract(f.otherExpenses)
   const grossIncome = f.grossSalesReceipts.subtract(f.costOfSales)
   const regime = corporateRegime(ctx)
-  const r = computeCorporateIncomeTax(
+  const quarterly = sumPriorFiguresInYear(ctx, '1702Q', fyStart, fyEnd, 'netPayable')
+  const credits = quarterly.add(f.creditableWithheld)
+
+  // NOLCO vintages and excess-MCIT credits carry between years through the
+  // generated-return figures of the latest prior annual return
+  // (nolco_<lossYear> / mcit_<year> keys hold the unused remainders).
+  const priorAnnual = ctx.priorReturns
+    .filter((r) => r.formCode.startsWith('1702-') && r.periodTo < fyStart)
+    .sort((a, b) => b.periodTo.localeCompare(a.periodTo))[0]
+  const nolcoVintages = Object.entries(priorAnnual?.figures ?? {})
+    .filter(([k, v]) => /^nolco_\d{4}$/.test(k) && v > 0)
+    .map(([k, v]) => ({ lossYear: Number(k.slice(6)), amount: Money.fromCentavos(v), used: Money.ZERO }))
+  const mcitCredits = Object.entries(priorAnnual?.figures ?? {})
+    .filter(([k, v]) => /^mcit_\d{4}$/.test(k) && v > 0)
+    .map(([k, v]) => ({ year: Number(k.slice(5)), amount: Money.fromCentavos(v), used: Money.ZERO }))
+
+  const annual = computeCorporateAnnualTax(
     {
       regime,
-      netTaxableIncome: net,
+      netTaxableIncomeBeforeNolco: net,
       grossIncome,
       totalAssetsExclLand: Money.fromCentavos(overrides.totalAssetsExclLandCentavos ?? 0),
       yearsSinceStartOfOperations: yearsSinceStart(ctx, fyEnd),
       isDomestic: ctx.profile.entityType !== 'resident_foreign_corporation' && ctx.profile.entityType !== 'branch_office',
+      taxableYear: periodOfDate(fyEnd).year,
+      nolcoVintages,
+      mcitCredits,
+      creditsAndPayments: credits,
     },
     fyEnd,
   )
-  const quarterly = sumPriorFiguresInYear(ctx, '1702Q', fyStart, fyEnd, 'netPayable')
-  const credits = quarterly.add(f.creditableWithheld)
+
   const variant =
     regime === 'exempt' || regime === 'income_tax_holiday'
       ? 'EX'
@@ -525,16 +552,28 @@ export function buildReturn1702(
     header: header(`1702-${variant}`, ctx, fyStart, fyEnd),
     variant,
     grossIncome,
-    deductions: f.otherExpenses,
-    taxableIncome: net,
-    rcit: r.rcit,
-    mcit: r.mcit,
-    incentiveRateTax: regime === 'special_rate_incentive' ? r.incomeTaxDue : Money.ZERO,
-    taxDue: r.incomeTaxDue,
-    creditsAndPayments: credits,
-    netPayable: r.incomeTaxDue.subtract(credits),
+    deductions: f.otherExpenses.add(annual.nolcoDeduction),
+    taxableIncome: annual.taxableIncome,
+    rcit: annual.rcit,
+    mcit: annual.mcit,
+    incentiveRateTax: regime === 'special_rate_incentive' ? annual.incomeTaxDue : Money.ZERO,
+    taxDue: annual.incomeTaxDue,
+    creditsAndPayments: credits.add(annual.mcitCreditUsed),
+    netPayable: annual.netPayable,
   }
-  return { model, figures: { taxDue: r.incomeTaxDue.centavos, netPayable: model.netPayable.centavos } }
+  const figures: Record<string, number> = {
+    taxDue: annual.incomeTaxDue.centavos,
+    netPayable: annual.netPayable.centavos,
+  }
+  for (const v of annual.updatedNolcoVintages) {
+    const remaining = v.amount.subtract(v.used).centavos
+    if (remaining > 0) figures[`nolco_${v.lossYear}`] = remaining
+  }
+  for (const c of annual.updatedMcitCredits) {
+    const remaining = c.amount.subtract(c.used).centavos
+    if (remaining > 0) figures[`mcit_${c.year}`] = remaining
+  }
+  return { model, figures }
 }
 
 // ---------------- Annual information returns (1604 series) ----------------

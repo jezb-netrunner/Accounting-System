@@ -261,6 +261,49 @@ describe('certificates', () => {
   })
 })
 
+describe('corrections and memos', () => {
+  it('excludes documents whose entry was reversed from every document-derived figure', () => {
+    const ctx = makeContext()
+    // Reverse the rent bill's entry: its EWT and input VAT must drop out.
+    const original = ctx.entries.find((e) => e.sheetId === 's2')!
+    const reversal = {
+      ...original,
+      id: 'rev-1',
+      entryNo: 99,
+      reversalOfEntryId: original.id,
+      lines: original.lines,
+    }
+    const withReversal: ReturnContext = { ...ctx, entries: [...ctx.entries, reversal] }
+    expect(buildReturn1601Q(withReversal, Q1.from, Q1.to, 'EQ').model.totalTaxWithheld.isZero()).toBe(true)
+    expect(buildReturn2550Q(withReversal, Q1.from, Q1.to).model.inputVatCurrent.isZero()).toBe(true)
+    expect(build2307Certificates(withReversal, { year: 2026, month: 1 })).toHaveLength(0)
+  })
+
+  it('debit memos enter withholding negative, netting the QAP and certificates', () => {
+    const base = makeContext()
+    const memo: Sheet = {
+      id: 's-dm',
+      companyId: 'co-t',
+      type: 'debit_memo',
+      documentNo: 'DM-1',
+      date: '2026-02-20',
+      partyId: 'supp-1',
+      memo: '',
+      lines: [line({ description: 'Rent adjustment', accountCode: '5300', amountCentavos: 2_240_000, atc: 'WC100' })],
+      status: 'posted',
+      postedEntryId: 'dm-entry',
+      bankAccountCode: null,
+      payrollPeriod: null,
+    }
+    const ctx: ReturnContext = { ...base, sheets: [...base.sheets, memo] }
+    const q = buildReturn1601Q(ctx, Q1.from, Q1.to, 'EQ')
+    // 5,000 withheld on the bill − 1,000 reversed by the memo (5% of 20k net).
+    expect(q.model.totalTaxWithheld.format()).toBe('4,000.00')
+    const certs = build2307Certificates(ctx, { year: 2026, month: 1 })
+    expect(certs[0]!.totalWithheld.format()).toBe('4,000.00')
+  })
+})
+
 describe('buildSlsp', () => {
   it('aggregates sales and purchases per counterparty', () => {
     const slsp = buildSlsp(makeContext(), Q1.from, Q1.to)

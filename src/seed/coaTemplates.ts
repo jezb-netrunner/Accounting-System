@@ -14,6 +14,7 @@ export const STANDARD_PH_COA: readonly AccountTemplateRow[] = [
   { code: '1110', name: 'Cash in Bank', type: 'asset', taxTag: 'none', parentCode: '1000' },
   { code: '1200', name: 'Accounts Receivable — Trade', type: 'asset', taxTag: 'none', systemRole: 'accounts_receivable', parentCode: '1000' },
   { code: '1250', name: 'Creditable Withholding Tax (2307/2306)', type: 'asset', taxTag: 'creditable_wtax_receivable', parentCode: '1000' },
+  { code: '1260', name: 'Creditable VAT Withheld (Government)', type: 'asset', taxTag: 'creditable_vat_withheld', parentCode: '1000' },
   { code: '1300', name: 'Inventory', type: 'asset', taxTag: 'none', systemRole: 'inventory', parentCode: '1000' },
   { code: '1400', name: 'Input VAT', type: 'asset', taxTag: 'input_vat', parentCode: '1000' },
   { code: '1410', name: 'Deferred Input VAT (capital goods)', type: 'asset', taxTag: 'deferred_input_vat', parentCode: '1000' },
@@ -60,7 +61,7 @@ export const STANDARD_PH_COA: readonly AccountTemplateRow[] = [
   { code: '5900', name: 'Miscellaneous Expense', type: 'expense', taxTag: 'none', parentCode: '5000' },
 ]
 
-const VAT_ONLY_CODES = new Set(['1400', '1410', '2200', '2210', '4110', '4120'])
+const VAT_ONLY_CODES = new Set(['1260', '1400', '1410', '2200', '2210', '4110', '4120'])
 const PERCENTAGE_ONLY_CODES = new Set(['2410'])
 const PAYROLL_CODES = new Set(['2320', '2330', '2500', '5200', '5210'])
 const EWT_CODES = new Set(['2300'])

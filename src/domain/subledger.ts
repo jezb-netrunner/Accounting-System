@@ -95,6 +95,9 @@ export function buildPartyAging(
   normal: 'debit' | 'credit' = 'debit',
 ): Map<string, AgingBuckets> {
   const charges = new Map<string, { date: ISODate; remaining: number }[]>()
+  // Settlements arriving before any charge (advances/overpayments) wait here
+  // and absorb the next charges instead of silently disappearing.
+  const unapplied = new Map<string, number>()
   const sorted = [...entries]
     .filter((e) => e.date <= asOf)
     .sort((a, b) => (a.date === b.date ? a.entryNo - b.entryNo : a.date.localeCompare(b.date)))
@@ -107,9 +110,17 @@ export function buildPartyAging(
       if (signed === 0) continue
       const open = charges.get(l.partyId) ?? []
       if (signed > 0) {
-        open.push({ date: e.date, remaining: signed })
+        let amount = signed
+        const advance = unapplied.get(l.partyId) ?? 0
+        if (advance > 0) {
+          const take = Math.min(advance, amount)
+          unapplied.set(l.partyId, advance - take)
+          amount -= take
+        }
+        if (amount > 0) open.push({ date: e.date, remaining: amount })
       } else {
-        // Settlement: consume oldest charges first.
+        // Settlement: consume oldest charges first; keep any excess as an
+        // advance for future charges (a net credit balance never buckets).
         let toApply = -signed
         for (const c of open) {
           if (toApply === 0) break
@@ -117,8 +128,7 @@ export function buildPartyAging(
           c.remaining -= take
           toApply -= take
         }
-        // Over-settlement (credit balance) is ignored by the buckets; the
-        // subledger balance view is where a negative balance shows up.
+        if (toApply > 0) unapplied.set(l.partyId, (unapplied.get(l.partyId) ?? 0) + toApply)
       }
       charges.set(l.partyId, open)
     }

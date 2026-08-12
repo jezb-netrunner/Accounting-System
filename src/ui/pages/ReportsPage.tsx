@@ -327,7 +327,9 @@ function PrepareTab({
           </label>
           {formCode === '2550Q' && (
             <label className="flex flex-col">
-              <span className="text-xs text-slate-500">Amortized capital-goods input VAT (₱, optional)</span>
+              <span className="text-xs text-slate-500">
+                Amortized input VAT from pre-2022 capital-goods schedules (₱; do NOT re-enter VAT already in this quarter's purchases)
+              </span>
               <input value={amortizedOverride} onChange={(e) => setAmortizedOverride(e.target.value)} placeholder="0.00" className="rounded-md border border-slate-300 px-2 py-1.5" />
             </label>
           )}
@@ -566,7 +568,11 @@ function buildForReview(
       )
     }
     case formCode === '1702Q': {
-      const b = buildReturn1702Q(ctx, from, to, { totalAssetsExclLandCentavos: overrides.totalAssetsExclLandCentavos })
+      // 1702Q is CUMULATIVE: figures run from the fiscal year start, whatever
+      // quarter window the user picked.
+      const fqq = fiscalQuarterOf(to, ctx.profile.fiscalYearEndMonth)
+      const fiscalYearStart = addMonthsIso(fqq.startDate, -3 * (fqq.quarter - 1))
+      const b = buildReturn1702Q(ctx, fiscalYearStart, to, { totalAssetsExclLandCentavos: overrides.totalAssetsExclLandCentavos })
       const m = b.model
       return withFigures(
         b,
@@ -591,10 +597,9 @@ function buildForReview(
       )
     }
     case formCode.startsWith('1702-'): {
-      const fyEndMonth = ctx.profile.fiscalYearEndMonth
-      const fq2 = fiscalQuarterOf(to, fyEndMonth)
-      const fyStart = addMonthsIso(fq2.endDate, -11).slice(0, 8) + '01'
-      const b = buildReturn1702(ctx, from || fyStart, to, { totalAssetsExclLandCentavos: overrides.totalAssetsExclLandCentavos })
+      const fq2 = fiscalQuarterOf(to, ctx.profile.fiscalYearEndMonth)
+      const fyStart = addMonthsIso(fq2.startDate, -3 * (fq2.quarter - 1))
+      const b = buildReturn1702(ctx, fyStart, to, { totalAssetsExclLandCentavos: overrides.totalAssetsExclLandCentavos })
       const m = b.model
       return withFigures(b, [
         { label: 'Variant', value: `1702-${m.variant}` },

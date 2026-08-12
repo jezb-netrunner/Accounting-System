@@ -22,6 +22,7 @@ export type TaxTag =
   | 'fwt_payable'
   | 'compensation_wtax_payable'
   | 'creditable_wtax_receivable' // 2307s we received from customers
+  | 'creditable_vat_withheld' // 5% VAT withheld by government payors (2306) — a VAT credit, never an income-tax credit
   | 'income_tax_payable'
   | 'dst_payable'
   | 'sales_vatable'

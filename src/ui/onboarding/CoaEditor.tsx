@@ -25,6 +25,7 @@ const TAX_TAGS: TaxTag[] = [
   'fwt_payable',
   'compensation_wtax_payable',
   'creditable_wtax_receivable',
+  'creditable_vat_withheld',
   'income_tax_payable',
   'dst_payable',
   'sales_vatable',
