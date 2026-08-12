@@ -1,6 +1,8 @@
 import type { BankAccountId, CompanyId, EmployeeId, ItemId, PartyId, RegisteredParty } from './core'
-import type { PayeeClass } from '../tax/rules/withholding'
+import { pct } from '../lib/money'
+import type { AtcRateRule, PayeeClass, WithholdingKind } from '../tax/rules/withholding'
 import type { VatClass } from '../tax/engine/vat'
+import type { Sheet } from './sheets'
 
 /** Customers and suppliers share a shape; role flags keep one party list. */
 export interface Party extends RegisteredParty {
@@ -12,6 +14,8 @@ export interface Party extends RegisteredParty {
   readonly isGovernment: boolean
   /** Default ATC applied to purchases from this supplier, when any. */
   readonly defaultAtc: string | null
+  /** Set when this record was merged into another; referenced history resolves through it. */
+  readonly mergedIntoId?: PartyId | null
   readonly active: boolean
 }
 
@@ -91,3 +95,49 @@ export interface NumberingSeries {
 
 export const formatDocumentNo = (series: NumberingSeries, n: number): string =>
   `${series.prefix}${String(n).padStart(series.padding, '0')}`
+
+/**
+ * Company-level ATC master data extending the built-in seed matrix. Rows the
+ * rules table doesn't know become pickable and compute at this flat rate.
+ */
+export interface AtcCode {
+  readonly id: string
+  readonly companyId: CompanyId
+  readonly atc: string
+  readonly kind: WithholdingKind
+  readonly payeeClass: PayeeClass
+  readonly natureOfPayment: string
+  /** Percent with up to 4 decimals (e.g. 1, 2, 7.5). */
+  readonly ratePercent: number
+  readonly active: boolean
+}
+
+export const atcCodeToRule = (a: AtcCode): AtcRateRule => ({
+  atc: a.atc,
+  kind: a.kind,
+  payeeClass: a.payeeClass,
+  natureOfPayment: a.natureOfPayment,
+  rate: pct(a.ratePercent),
+  higherRate: null,
+  higherRateThresholdCentavos: null,
+})
+
+// ---- Reference checks: what may be deleted vs merely deactivated ----
+
+export const referencedPartyIds = (sheets: readonly Sheet[]): Set<string> => {
+  const ids = new Set<string>()
+  for (const s of sheets) if (s.partyId) ids.add(s.partyId)
+  return ids
+}
+
+export const referencedItemIds = (sheets: readonly Sheet[]): Set<string> => {
+  const ids = new Set<string>()
+  for (const s of sheets) for (const l of s.lines) if (l.itemId) ids.add(l.itemId)
+  return ids
+}
+
+export const referencedEmployeeIds = (sheets: readonly Sheet[]): Set<string> => {
+  const ids = new Set<string>()
+  for (const s of sheets) for (const l of s.lines) if (l.employeeId) ids.add(l.employeeId)
+  return ids
+}

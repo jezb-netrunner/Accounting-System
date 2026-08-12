@@ -31,6 +31,8 @@ export interface Form2550Q {
   readonly inputVatAllocatedToExempt: Money
   readonly creditableVatWithheld: Money
   readonly netVatPayable: Money
+  /** Excess credits carried to the next quarter (0 when a payable exists). */
+  readonly excessInputVatCarryForward: Money
 }
 
 export interface Form2551Q {

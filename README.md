@@ -6,17 +6,25 @@ proprietorships, or any single regime is hardcoded: everything derives from a
 `TaxProfile` resolved at company setup, and all rates/thresholds live in
 versioned rule tables keyed by effectivity date.
 
-> **Status: scaffold.** The tax engine, domain model, data ports, filing
-> calendar, report models, and UI shells are in place with 122 unit tests.
-> Rendering real BIR file formats and the Supabase backend are intentionally
-> stubbed behind stable interfaces. See [ARCHITECTURE.md](ARCHITECTURE.md).
+> **Status: working application, offline-first.** The tax engine (VAT with
+> carry-forward and capital-goods amortization, expanded/final/compensation
+> withholding, graduated/OSD/8% and RCIT/MCIT with NOLCO), profile-driven
+> onboarding, master data with bulk import, spreadsheet sheet entry, the
+> append-only posting engine with reversal/correction, subsidiary ledgers and
+> aging, BIR books with print views, comparative financial statements with
+> drill-through, returns with carry-forward state and certificates, period
+> close with blocker/warning checks, and whole-company JSON portability are
+> implemented over the local (IndexedDB) adapter. The BIR `.DAT`/XML file
+> layouts are deliberately gated as **UNVERIFIED** (see
+> [docs/bir-formats/](docs/bir-formats/README.md)) and the Supabase adapter
+> remains a stub behind the same ports. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Quick start
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # vitest, 122 tests
+npm test           # vitest (unit + integration incl. the end-to-end flow)
 npm run build      # tsc -b (strict) + vite build → dist/
 ```
 
@@ -81,9 +89,13 @@ derives `BASE_PATH` from the repo name.
 
 ## What is deliberately not here yet
 
-- Real output formats: PDF/eBIRForms renderers and the pipe-delimited `.DAT`
-  layouts (typed models + writer interfaces are in place and tested).
+- **BIR `.DAT` and eBIRForms XML layouts** — the writers refuse to emit
+  submission files until the authoritative field layouts are transcribed
+  into [docs/bir-formats/](docs/bir-formats/README.md) (each spec carries
+  explicit UNVERIFIED markers and a deliberately-failing test). Draft CSVs
+  with a not-for-submission banner carry the same data for review.
 - Supabase: the adapter throws `NotImplemented`; the SQL schema and RLS
   drafts are authored in `supabase/migrations/0001_init.sql` but **not applied**.
-- SSS/PhilHealth/Pag-IBIG contribution tables (planned as another versioned
-  rules table), holiday-aware deadline shifting, master-data CSV import.
+- SSS/PhilHealth/Pag-IBIG contribution *tables* (employee-share amounts are
+  keyed on the payroll register; the computed tables are a planned versioned
+  rules table) and holiday-aware deadline shifting.

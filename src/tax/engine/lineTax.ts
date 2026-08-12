@@ -29,6 +29,8 @@ export interface DocumentTaxContext {
   readonly counterpartyIsGovernment: boolean
   /** Payee's cumulative gross this year, for two-tier ATC stepping. */
   readonly cumulativeAnnualGrossToPayee?: Money
+  /** Company-defined ATC rows (master data) beyond the built-in matrix. */
+  readonly customAtcRates?: readonly import('../rules/withholding').AtcRateRule[]
 }
 
 export interface DerivedTaxLine {
@@ -83,6 +85,7 @@ export function deriveLineTax(ctx: DocumentTaxContext, line: TaxLineInput): Deri
     if (isAgent || isWithheldByCustomer) {
       withholding = computeWithholding(line.atc, withholdingBase, ctx.date, {
         cumulativeAnnualGross: ctx.cumulativeAnnualGrossToPayee,
+        extraRates: ctx.customAtcRates,
       })
     }
   }

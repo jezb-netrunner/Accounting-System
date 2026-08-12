@@ -11,6 +11,11 @@ import { Dashboard } from './pages/Dashboard'
 import { SheetsPage } from './pages/SheetsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { ClosePage } from './pages/ClosePage'
+import { SettingsPage } from './pages/SettingsPage'
+import { MasterDataPage } from './pages/MasterDataPage'
+import { LedgerPage } from './pages/LedgerPage'
+import { BooksPage } from './pages/BooksPage'
+import { StatementsPage } from './pages/StatementsPage'
 
 const rootRoute = createRootRoute({ component: Outlet })
 
@@ -42,6 +47,8 @@ const sheetsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: 'sheets/$sheetType',
   component: SheetsPage,
+  validateSearch: (search: Record<string, unknown>): { open?: string } =>
+    typeof search.open === 'string' ? { open: search.open } : {},
 })
 
 const reportsRoute = createRoute({
@@ -56,10 +63,50 @@ const closeRoute = createRoute({
   component: ClosePage,
 })
 
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'settings',
+  component: SettingsPage,
+})
+
+const masterRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'master/$section',
+  component: MasterDataPage,
+})
+
+const ledgerRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'ledger/$view',
+  component: LedgerPage,
+})
+
+const booksRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'books',
+  component: BooksPage,
+})
+
+const statementsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'statements',
+  component: StatementsPage,
+})
+
 const routeTree = rootRoute.addChildren([
   landingRoute,
   onboardingRoute,
-  appRoute.addChildren([dashboardRoute, sheetsRoute, reportsRoute, closeRoute]),
+  appRoute.addChildren([
+    dashboardRoute,
+    sheetsRoute,
+    reportsRoute,
+    closeRoute,
+    settingsRoute,
+    masterRoute,
+    ledgerRoute,
+    booksRoute,
+    statementsRoute,
+  ]),
 ])
 
 /**

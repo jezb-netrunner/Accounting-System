@@ -1,8 +1,10 @@
 import Dexie, { type Table } from 'dexie'
+import type { AuditEvent } from '../../../domain/audit'
 import type { Account } from '../../../domain/coa'
 import type { CompanyId } from '../../../domain/core'
 import type { JournalEntry } from '../../../domain/journal'
 import type {
+  AtcCode,
   BankAccount,
   Employee,
   Item,
@@ -13,6 +15,7 @@ import { formatDocumentNo } from '../../../domain/masterData'
 import type { PeriodLock } from '../../../domain/periodClose'
 import type { Sheet } from '../../../domain/sheets'
 import type { TaxProfile } from '../../../domain/taxProfile'
+import type { GeneratedReturn } from '../../../reports/returns/context'
 import type { Company, DataPort } from '../../ports'
 
 /**
@@ -36,10 +39,13 @@ class PhBooksDB extends Dexie {
   employees!: Table<Employee, string>
   bankAccounts!: Table<BankAccount, string>
   items!: Table<Item, string>
+  atcCodes!: Table<AtcCode, string>
   numbering!: Table<NumberingSeries, string>
   sheets!: Table<Sheet, string>
   journal!: Table<JournalEntry, string>
   periodLocks!: Table<PeriodLock, [string, string]>
+  audit!: Table<AuditEvent, string>
+  generatedReturns!: Table<GeneratedReturn, string>
 
   constructor(name = 'ph-books') {
     super(name)
@@ -56,6 +62,15 @@ class PhBooksDB extends Dexie {
       journal: 'id, companyId, [companyId+entryNo], [companyId+date]',
       periodLocks: '[companyId+periodKey], companyId',
     })
+    this.version(2).stores({
+      atcCodes: 'id, companyId',
+    })
+    this.version(3).stores({
+      audit: 'id, companyId, [companyId+at]',
+    })
+    this.version(4).stores({
+      generatedReturns: 'id, companyId, [companyId+formCode]',
+    })
   }
 }
 
@@ -65,6 +80,25 @@ export function createLocalAdapter(dbName?: string): DataPort {
   const db = new PhBooksDB(dbName)
 
   return {
+    postDocument: async ({ sheet, entry }) => {
+      if (sheet.status !== 'posted' || sheet.postedEntryId !== entry.id) {
+        throw new AppendOnlyViolationError('postDocument expects a posted sheet bound to its entry')
+      }
+      await db.transaction('rw', db.sheets, db.journal, async () => {
+        const existingSheet = await db.sheets.get(sheet.id)
+        if (existingSheet && existingSheet.status !== 'draft') {
+          throw new AppendOnlyViolationError(
+            `Sheet ${sheet.documentNo} is already ${existingSheet.status}`,
+          )
+        }
+        const existingEntry = await db.journal.get(entry.id)
+        if (existingEntry) {
+          throw new AppendOnlyViolationError(`Journal entry ${entry.id} already exists`)
+        }
+        await db.sheets.put(sheet)
+        await db.journal.add(entry)
+      })
+    },
     companies: {
       list: () => db.companies.toArray(),
       get: async (id) => (await db.companies.get(id)) ?? null,
@@ -109,12 +143,18 @@ export function createLocalAdapter(dbName?: string): DataPort {
       save: async (party) => {
         await db.parties.put(party)
       },
+      delete: async (id) => {
+        await db.parties.delete(id)
+      },
     },
 
     employees: {
       list: (companyId) => db.employees.where('companyId').equals(companyId).toArray(),
       save: async (employee) => {
         await db.employees.put(employee)
+      },
+      delete: async (id) => {
+        await db.employees.delete(id)
       },
     },
 
@@ -123,12 +163,28 @@ export function createLocalAdapter(dbName?: string): DataPort {
       save: async (account) => {
         await db.bankAccounts.put(account)
       },
+      delete: async (id) => {
+        await db.bankAccounts.delete(id)
+      },
     },
 
     items: {
       list: (companyId) => db.items.where('companyId').equals(companyId).toArray(),
       save: async (item) => {
         await db.items.put(item)
+      },
+      delete: async (id) => {
+        await db.items.delete(id)
+      },
+    },
+
+    atcCodes: {
+      list: (companyId) => db.atcCodes.where('companyId').equals(companyId).toArray(),
+      save: async (code) => {
+        await db.atcCodes.put(code)
+      },
+      delete: async (id) => {
+        await db.atcCodes.delete(id)
       },
     },
 
@@ -167,6 +223,18 @@ export function createLocalAdapter(dbName?: string): DataPort {
             )
           }
           await db.sheets.put(sheet)
+        })
+      },
+      deleteDraft: async (sheetId) => {
+        await db.transaction('rw', db.sheets, async () => {
+          const existing = await db.sheets.get(sheetId)
+          if (!existing) return
+          if (existing.status !== 'draft') {
+            throw new AppendOnlyViolationError(
+              `Sheet ${existing.documentNo} is ${existing.status} and cannot be deleted`,
+            )
+          }
+          await db.sheets.delete(sheetId)
         })
       },
       markPosted: async (sheetId, entryId) => {
@@ -220,6 +288,29 @@ export function createLocalAdapter(dbName?: string): DataPort {
       list: (companyId) => db.periodLocks.where('companyId').equals(companyId).toArray(),
       append: async (lock) => {
         await db.periodLocks.add(lock)
+      },
+      remove: async (companyId, periodKey) => {
+        await db.periodLocks.delete([companyId, periodKey])
+      },
+    },
+
+    audit: {
+      append: async (event) => {
+        await db.audit.add(event)
+      },
+      list: async (companyId, limit = 500) => {
+        const rows = await db.audit.where('companyId').equals(companyId).toArray()
+        return rows.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit)
+      },
+    },
+
+    generatedReturns: {
+      list: (companyId) => db.generatedReturns.where('companyId').equals(companyId).toArray(),
+      save: async (generated) => {
+        await db.generatedReturns.put(generated)
+      },
+      delete: async (id) => {
+        await db.generatedReturns.delete(id)
       },
     },
   }
